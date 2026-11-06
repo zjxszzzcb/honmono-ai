@@ -47,7 +47,7 @@ function DashboardInner() {
           </p>
         </div>
         <button
-          className="btn-primary"
+          className="btn-primary whitespace-nowrap"
           onClick={merchant?.activated ? create : () => nav("/activate")}
           disabled={busy}
         >
