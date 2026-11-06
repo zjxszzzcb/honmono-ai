@@ -67,6 +67,8 @@ export async function executeConfigRun(runId: string): Promise<void> {
       const nextVersion = (latest?.v ?? 0) + 1;
       const newRootRel = storage.versionDir(service.merchantId, service.id, nextVersion);
       await storage.copyRecursively(draftVersion.rootPath, newRootRel);
+      // _guides 是配置期规范，不进入运行时版本
+      await storage.removeRecursively(`${newRootRel}/_guides`).catch(() => {});
       const files = await storage.listTree(newRootRel);
 
       const result = await db.transaction(async (tx) => {

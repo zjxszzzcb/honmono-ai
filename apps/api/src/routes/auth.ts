@@ -2,7 +2,6 @@ import { and, desc, eq, gt, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { hash, verify } from "@node-rs/argon2";
-import { z } from "zod";
 import { db, merchants, inviteCodes, purchases, adminUsers, customerServices, skillVersions, conversations } from "@honmono/db";
 import { appendMessage, getOrCreateConversation } from "@honmono/db";
 import {
@@ -121,5 +120,3 @@ adminAuthRoutes.get("/me", async (c) => {
   if (!row || row.status !== "active") return c.json({ error: "unauthorized" }, 401);
   return c.json({ id: row.id, email: row.email });
 });
-
-export const _unusedGuard = z.string();

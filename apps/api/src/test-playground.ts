@@ -7,8 +7,6 @@ import {
   db,
   createRunIdempotent,
   getOrCreateConversation,
-  getRunById,
-  getService,
   getSkillVersion,
   listMessages,
   resolveModel,
@@ -187,5 +185,3 @@ export async function runTestPlayground(
     }
   });
 }
-
-export const __ensureImport = { getRunById, getService, TestRunInput, composeRuntimeSystemPrompt, createRunTracer };

@@ -11,7 +11,7 @@ description: 创建、补全、校验并发布商户 AI 客服 Skill。用于客
 
 ## 每次执行
 1. 先读取当前草稿 `SKILL.md`、`references/` 下已有文件，了解已经确认了什么。
-2. 判断公司与产品类别，只读取最相关的一份 `references/industry-*.md`（配置技能自带的行业参考，位于本技能说明同级目录之外时按服务端注入的路径读取）。
+2. 判断公司与产品类别，只读取最相关的一份 `_guides/industry-*.md`（_guides 是服务端注入的采访指南目录：interview-playbook、readiness-contract、output-contract、file-normalization、industry-*。这些是给你看的规范，不是商户知识，不得写入发布索引）。
 3. 合并已有事实，生成缺口列表；不要重复询问已经回答或被跳过的项。
 4. 按 P0 → P1 → P2 排序，每轮最多问 1-2 个相关问题。
 5. 将确认信息写入草稿的 `SKILL.md`、`references/company.md`、`references/products.md`、`references/policies.md`、`references/faq.md`、`references/conversation-rules.md`。

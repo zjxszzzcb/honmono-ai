@@ -53,6 +53,7 @@ services:
     build:
       context: .
       target: web
+      args: { NPM_PROXY: "${NPM_PROXY:-}" }
     profiles: ["app"]
     restart: unless-stopped
     ports:
@@ -68,6 +69,7 @@ services:
     build:
       context: .
       target: api
+      args: { NPM_PROXY: "${NPM_PROXY:-}" }
     profiles: ["app"]
     restart: unless-stopped
     environment:
@@ -107,6 +109,7 @@ services:
     build:
       context: .
       target: worker
+      args: { NPM_PROXY: "${NPM_PROXY:-}" }
     profiles: ["app"]
     restart: unless-stopped
     environment:
@@ -133,6 +136,7 @@ services:
     build:
       context: .
       target: migrate
+      args: { NPM_PROXY: "${NPM_PROXY:-}" }
     profiles: ["app"]
     restart: "no"
     environment:

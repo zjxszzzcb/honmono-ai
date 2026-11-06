@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import {
@@ -86,6 +86,9 @@ serviceRoutes.post("/", async (c) => {
   const fs = await import("node:fs/promises");
   await fs.mkdir(storage.resolveWithin(storage.incomingDir(merchantId, service.id)), { recursive: true });
   await fs.cp(templateRoot, draftRoot, { recursive: true });
+  // 注入配置 Agent 的采访指南（draft-only，发布时剔除）
+  const guidesSrc = new URL("../../../../skills/create-customer-service/references", import.meta.url).pathname;
+  await fs.cp(guidesSrc, `${draftRoot}/_guides`, { recursive: true });
 
   // 配置会话 + Agent 欢迎语（由 worker 首轮触发；这里先写一条引导消息）
   await getOrCreateConversation(service.id, "config", null);
@@ -407,5 +410,3 @@ serviceRoutes.get("/:id/conversations/:cid/messages", async (c) => {
     messages: msgs.map((m) => ({ id: Number(m.id), role: m.role, author_type: m.authorType, content: m.content, created_at: m.createdAt })),
   });
 });
-
-export const _unused2 = gt;
