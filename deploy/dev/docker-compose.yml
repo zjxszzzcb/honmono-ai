@@ -1,0 +1,167 @@
+# 开发环境基础设施：Postgres(应用+Langfuse 双库)、Redis(应用)、Langfuse v4 全家桶。
+# JS 应用（api/worker/web）本地跑；生产部署使用仓库根目录 docker-compose.yml。
+# 启动：docker compose -f deploy/dev/docker-compose.yml up -d
+name: honmono-dev
+
+services:
+  postgres:
+    image: docker.io/postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - honmono_pg_data:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis-app:
+    image: docker.io/redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:6380:6379"
+    volumes:
+      - honmono_redis_app_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+
+  clickhouse:
+    image: docker.io/clickhouse/clickhouse-server:26.3.62.3
+    restart: unless-stopped
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: clickhouse-dev
+    volumes:
+      - honmono_clickhouse_data:/var/lib/clickhouse
+      - honmono_clickhouse_logs:/var/log/clickhouse-server
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  minio:
+    image: cgr.dev/chainguard/minio
+    restart: unless-stopped
+    entrypoint: sh
+    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
+    environment:
+      MINIO_ROOT_USER: langfuse-minio
+      MINIO_ROOT_PASSWORD: langfuse-minio-dev
+    volumes:
+      - honmono_minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  redis-langfuse:
+    image: docker.io/redis:7-alpine
+    restart: unless-stopped
+    command: >
+      --requirepass langfuse-redis-dev
+      --maxmemory-policy noeviction
+    volumes:
+      - honmono_redis_lf_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a langfuse-redis-dev ping | grep PONG"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+
+  langfuse-web:
+    image: docker.langfuse.com/langfuse/langfuse:4
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis-langfuse:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment: &langfuse-env
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: dev-nextauth-secret-honmono
+      SALT: dev-salt-honmono
+      ENCRYPTION_KEY: 6b3f1d9c2a7e8450c1f2b3a4d5e6f70891a2b3c4d5e6f70891a2b3c4d5e6f708
+      TELEMETRY_ENABLED: "false"
+      LANGFUSE_MIGRATION_V4_WRITE_MODE: dual
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/langfuse
+      CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: clickhouse-dev
+      CLICKHOUSE_CLUSTER_ENABLED: "false"
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: langfuse-minio
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: langfuse-minio-dev
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: langfuse-minio
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: langfuse-minio-dev
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_MEDIA_UPLOAD_INTERNAL_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+      REDIS_HOST: redis-langfuse
+      REDIS_PORT: "6379"
+      REDIS_AUTH: langfuse-redis-dev
+      LANGFUSE_BULLMQ_SKIP_REDIS_VERSION_CHECK: "true"
+      # 首次启动自动创建组织、项目、API Key 与初始用户（headless initialization）
+      LANGFUSE_INIT_ORG_ID: honmono
+      LANGFUSE_INIT_ORG_NAME: Honmono AI
+      LANGFUSE_INIT_PROJECT_ID: production
+      LANGFUSE_INIT_PROJECT_NAME: Production
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: pk-lf-honmono-local
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: sk-lf-honmono-local-0000000000000000
+      LANGFUSE_INIT_USER_EMAIL: langfuse-admin@honmono.local
+      LANGFUSE_INIT_USER_NAME: Langfuse Admin
+      LANGFUSE_INIT_USER_PASSWORD: langfuse-admin-dev
+
+  langfuse-worker:
+    image: docker.langfuse.com/langfuse/langfuse-worker:4
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis-langfuse:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    environment: *langfuse-env
+
+volumes:
+  honmono_pg_data:
+  honmono_redis_app_data:
+  honmono_clickhouse_data:
+  honmono_clickhouse_logs:
+  honmono_minio_data:
+  honmono_redis_lf_data:

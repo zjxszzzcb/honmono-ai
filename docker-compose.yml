@@ -1,0 +1,273 @@
+# 轻量 AI 客服产品 · 生产部署编排
+# 应用服务使用 profile "app"；基础设施（含 Langfuse 全家桶）默认启动。
+#   仅基础设施： docker compose up -d
+#   全量部署：   docker compose --profile app up -d --build
+# 停止：       docker compose down （down -v 会删除数据卷，不作为常规停止命令）
+name: honmono
+
+x-langfuse-common: &langfuse-common
+  NEXTAUTH_URL: ${LANGFUSE_PUBLIC_URL:-http://localhost:3000}
+  NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET required}
+  SALT: ${LANGFUSE_SALT:?LANGFUSE_SALT required}
+  ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:?LANGFUSE_ENCRYPTION_KEY required}
+  TELEMETRY_ENABLED: "false"
+  LANGFUSE_MIGRATION_V4_WRITE_MODE: dual
+  DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}@postgres:5432/langfuse
+  CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+  CLICKHOUSE_URL: http://clickhouse:8123
+  CLICKHOUSE_USER: clickhouse
+  CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD required}
+  CLICKHOUSE_CLUSTER_ENABLED: "false"
+  LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+  LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?MINIO_ROOT_USER required}
+  LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD required}
+  LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+  LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+  LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+  LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+  LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+  LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+  LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://minio:9000
+  LANGFUSE_S3_MEDIA_UPLOAD_INTERNAL_ENDPOINT: http://minio:9000
+  LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+  LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+  REDIS_HOST: redis-langfuse
+  REDIS_PORT: "6379"
+  REDIS_AUTH: ${REDIS_LANGFUSE_AUTH:?REDIS_LANGFUSE_AUTH required}
+  LANGFUSE_BULLMQ_SKIP_REDIS_VERSION_CHECK: "true"
+  LANGFUSE_INIT_ORG_ID: ${LANGFUSE_INIT_ORG_ID:-ai-customer-service}
+  LANGFUSE_INIT_ORG_NAME: ${LANGFUSE_INIT_ORG_NAME:-AI Customer Service}
+  LANGFUSE_INIT_PROJECT_ID: ${LANGFUSE_INIT_PROJECT_ID:-production}
+  LANGFUSE_INIT_PROJECT_NAME: ${LANGFUSE_INIT_PROJECT_NAME:-Production}
+  LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-}
+  LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY:-}
+  LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL:-}
+  LANGFUSE_INIT_USER_NAME: Langfuse Admin
+  LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-}
+
+services:
+  # ============ 应用（profile: app）============
+  web:
+    build:
+      context: .
+      target: web
+    profiles: ["app"]
+    restart: unless-stopped
+    ports:
+      - "${APP_HTTP_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    logging: &logging
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  api:
+    build:
+      context: .
+      target: api
+    profiles: ["app"]
+    restart: unless-stopped
+    environment:
+      API_PORT: 4001
+      APP_SESSION_SECRET: ${APP_SESSION_SECRET:?required}
+      MODEL_CONFIG_ENCRYPTION_KEY: ${MODEL_CONFIG_ENCRYPTION_KEY:?required}
+      ADMIN_INITIAL_EMAIL: ${ADMIN_INITIAL_EMAIL:-}
+      ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:-}
+      APP_DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/app
+      REDIS_URL: redis://redis-app:6379
+      STORAGE_DRIVER: local
+      STORAGE_ROOT: /data/ai-customer-service
+      WEB_ORIGIN: ${WEB_ORIGIN:-}
+      LANGFUSE_BASE_URL: http://langfuse-web:3000
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY:-}
+      CHAT_RUN_TIMEOUT_SECONDS: ${CHAT_RUN_TIMEOUT_SECONDS:-180}
+      QUEUE_FULL_LIMIT: ${QUEUE_FULL_LIMIT:-20}
+    volumes:
+      - app-storage:/data/ai-customer-service
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis-app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4001/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    logging: *logging
+
+  worker:
+    build:
+      context: .
+      target: worker
+    profiles: ["app"]
+    restart: unless-stopped
+    environment:
+      APP_DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/app
+      REDIS_URL: redis://redis-app:6379
+      STORAGE_ROOT: /data/ai-customer-service
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
+      LANGFUSE_BASE_URL: http://langfuse-web:3000
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY:-}
+      CHAT_RUN_TIMEOUT_SECONDS: ${CHAT_RUN_TIMEOUT_SECONDS:-180}
+    volumes:
+      - app-storage:/data/ai-customer-service
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis-app:
+        condition: service_healthy
+    logging: *logging
+
+  migrate:
+    build:
+      context: .
+      target: migrate
+    profiles: ["app"]
+    restart: "no"
+    environment:
+      APP_DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/app
+      ADMIN_INITIAL_EMAIL: ${ADMIN_INITIAL_EMAIL:-}
+      ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:-}
+      MODEL_CONFIG_ENCRYPTION_KEY: ${MODEL_CONFIG_ENCRYPTION_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *logging
+
+  # ============ 数据与队列 ============
+  postgres:
+    image: docker.io/postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: postgres
+      TZ: UTC
+      PGTZ: UTC
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./deploy/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging: *logging
+
+  redis-app:
+    image: docker.io/redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-app-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+
+  # ============ Langfuse 自托管全家桶 ============
+  clickhouse:
+    image: docker.io/clickhouse/clickhouse-server:26.3.62.3
+    restart: unless-stopped
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - clickhouse-logs:/var/log/clickhouse-server
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    logging: *logging
+
+  minio:
+    image: cgr.dev/chainguard/minio
+    restart: unless-stopped
+    entrypoint: sh
+    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?required}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    logging: *logging
+
+  redis-langfuse:
+    image: docker.io/redis:7-alpine
+    restart: unless-stopped
+    command: >
+      --requirepass ${REDIS_LANGFUSE_AUTH}
+      --maxmemory-policy noeviction
+    volumes:
+      - redis-langfuse-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a ${REDIS_LANGFUSE_AUTH} ping | grep PONG"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+
+  langfuse-web:
+    image: docker.langfuse.com/langfuse/langfuse:4
+    restart: unless-stopped
+    ports:
+      - "${LANGFUSE_HTTP_PORT:-3000}:3000"
+    environment: *langfuse-common
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis-langfuse:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    logging: *logging
+
+  langfuse-worker:
+    image: docker.langfuse.com/langfuse/langfuse-worker:4
+    restart: unless-stopped
+    environment: *langfuse-common
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis-langfuse:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    logging: *logging
+
+volumes:
+  app-storage:
+  postgres-data:
+  redis-app-data:
+  redis-langfuse-data:
+  clickhouse-data:
+  clickhouse-logs:
+  minio-data:

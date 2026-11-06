@@ -1,0 +1,7 @@
+node_modules
+**/node_modules
+storage
+.git
+*.log
+.env
+deploy/dev

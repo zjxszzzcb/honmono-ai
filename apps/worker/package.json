@@ -1,0 +1,25 @@
+{
+  "name": "@honmono/worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@honmono/agent": "*",
+    "@honmono/contracts": "*",
+    "@honmono/db": "*",
+    "@honmono/storage": "*",
+    "bullmq": "^5.63.0",
+    "ioredis": "^5.8.0",
+    "@node-rs/argon2": "^2.0.2",
+    "exceljs": "^4.4.0",
+    "mammoth": "^1.11.0",
+    "tsx": "^4.20.0",
+    "unpdf": "^1.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22"
+  }
+}

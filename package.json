@@ -1,0 +1,25 @@
+{
+  "name": "honmono-ai",
+  "private": true,
+  "version": "0.1.0",
+  "description": "轻量 AI 客服产品：商户后台、管理员后台、Agent Skill、Chat API、人工接管、Langfuse 可观测、Docker Compose 部署",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w apps/api",
+    "dev:worker": "npm run dev -w apps/worker",
+    "dev:web": "npm run dev -w apps/web",
+    "db:generate": "npm run db:generate -w packages/db",
+    "db:migrate": "npm run db:migrate -w packages/db",
+    "db:seed": "npm run db:seed -w packages/db",
+    "typecheck": "tsc --noEmit -p packages/contracts && tsc --noEmit -p packages/db && tsc --noEmit -p packages/agent && tsc --noEmit -p apps/api && tsc --noEmit -p apps/worker"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "overrides": {
+    "@opentelemetry/api": "1.10.0"
+  }
+}

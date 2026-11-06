@@ -1,0 +1,1084 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="轻量 AI 客服产品的技术设计与实现计划：商户与管理员后台、平台 LLM 配置、Agent Skill、Chat API、人工接管、Langfuse 与 Docker Compose 部署。">
+<link rel="icon" href="data:,">
+<title>轻量 AI 客服产品｜技术设计与实现计划 v0.2</title>
+<style>
+:root{
+  --p-blue:oklch(0.45 0.17 263);
+  --p-blue-link:oklch(0.54 0.18 249);
+  --p-paper:oklch(0.975 0.002 95);
+  --p-ink:oklch(0.36 0.01 260);
+  --p-heading:oklch(0.40 0.01 260);
+  --p-red:oklch(0.63 0.22 25);
+  --p-line:oklch(0.88 0.006 260);
+  --surface:var(--p-paper);
+  --surface-raised:oklch(0.992 0.002 95);
+  --surface-code:oklch(0.94 0.008 260);
+  --text:var(--p-ink);
+  --text-heading:var(--p-heading);
+  --text-muted:oklch(0.47 0.012 260);
+  --accent:var(--p-blue);
+  --link:var(--p-blue-link);
+  --danger:var(--p-red);
+  --border:var(--p-line);
+  --hero-bg:var(--accent);
+  --hero-text:oklch(0.975 0.002 95);
+  --code-bg:var(--surface-code);
+  --focus:var(--p-blue-link);
+  --radius:8px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:84px}
+body{font:16px/1.72 "IBM Plex Sans","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;color:var(--text);background:var(--surface);-webkit-font-smoothing:antialiased}
+button,a,summary{-webkit-tap-highlight-color:transparent}
+button{font:inherit;cursor:pointer}
+a{color:var(--link);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
+a:hover{text-decoration-thickness:2px}
+:focus-visible{outline:3px solid var(--focus);outline-offset:4px}
+::selection{background:oklch(0.86 0.07 255);color:var(--text-heading)}
+h1,h2,h3,h4{color:var(--text-heading);line-height:1.24;text-wrap:balance;font-weight:600}
+h1{font-size:clamp(2.25rem,6vw,4.8rem);letter-spacing:-.035em;max-width:14ch}
+h2{font-size:clamp(1.65rem,3vw,2.25rem);letter-spacing:-.02em;margin-bottom:20px}
+h3{font-size:1.22rem;margin:36px 0 12px}
+h4{font-size:1rem;margin:24px 0 8px}
+p{margin:0 0 16px;max-width:75ch}
+ul,ol{margin:0 0 18px 1.35em;padding-left:.4em}
+li{margin:6px 0}
+code,kbd,pre{font-family:Menlo,Monaco,"SFMono-Regular",Consolas,"Liberation Mono",monospace}
+code{font-size:.88em;background:oklch(0.91 0.008 260);border-radius:4px;padding:.12em .38em;overflow-wrap:anywhere}
+pre code{background:none;padding:0;font-size:13px;line-height:1.65;overflow-wrap:normal}
+strong{color:var(--text-heading)}
+.wrap{width:min(46rem,calc(100% - 40px));margin-inline:auto}
+.breakout{width:min(70rem,94vw);margin-inline:calc((100% - min(70rem,94vw))/2)}
+.hero{background:var(--hero-bg);color:var(--hero-text);padding:72px 0 58px;position:relative}
+.hero:after{content:"";position:absolute;right:5vw;bottom:32px;width:9px;height:9px;background:var(--hero-text);opacity:.55;box-shadow:18px 0 0 -2px var(--hero-text),36px 0 0 -4px var(--hero-text)}
+.hero-inner{width:min(70rem,90vw);margin:auto}
+.hero h1{color:var(--hero-text);margin:18px 0 26px}
+.hero .kicker{font-family:Menlo,Monaco,monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;opacity:.86}
+.hero .lede{font-size:clamp(1.05rem,2vw,1.28rem);max-width:62ch;line-height:1.65;color:var(--hero-text)}
+.hero-meta{display:flex;flex-wrap:wrap;gap:10px 28px;margin-top:36px;padding-top:18px;border-top:1px solid oklch(0.975 0.002 95 / .35);font-size:13px}
+.hero-meta span{opacity:.9}
+.progress{position:fixed;inset:0 0 auto;height:3px;background:transparent;z-index:30;pointer-events:none}
+.progress span{display:block;height:100%;width:0;background:oklch(0.77 0.14 75);transform-origin:left}
+.doc-nav{position:sticky;top:0;z-index:20;background:var(--surface-raised);border-bottom:1px solid var(--border)}
+.nav-inner{width:min(70rem,94vw);min-height:58px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.toc{position:relative}
+.toc summary{list-style:none;min-height:44px;display:flex;align-items:center;font-weight:600;color:var(--text-heading);cursor:pointer}
+.toc summary::-webkit-details-marker{display:none}
+.toc summary:before{content:"";width:8px;height:8px;border:1px solid var(--accent);margin-right:10px}
+.toc[open] summary:before{background:var(--accent)}
+.toc-panel{position:absolute;top:50px;left:0;width:min(560px,90vw);padding:18px 22px;background:var(--surface-raised);border:1px solid var(--border);box-shadow:0 16px 40px oklch(0.25 0.02 260 / .12);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 24px}
+.toc-panel a{display:block;padding:8px 0;color:var(--text);text-decoration:none;border-bottom:1px solid var(--border);font-size:14px}
+.toc-panel a:hover{color:var(--link)}
+.print-btn{border:1px solid var(--border);background:transparent;color:var(--text-heading);border-radius:5px;padding:8px 14px;min-height:44px;transition:background .15s ease-out}
+.print-btn:hover{background:var(--surface-code)}
+main{padding:20px 0 80px}
+.section{padding:54px 0 12px}
+.section + .section{border-top:1px solid var(--border);margin-top:42px}
+.section-no{font-family:Menlo,Monaco,monospace;color:var(--link);font-size:12px;letter-spacing:.08em;display:block;margin-bottom:12px}
+.lead{font-size:1.08rem;line-height:1.75}
+.decision{background:oklch(0.94 0.028 257);border:1px solid oklch(0.84 0.055 257);padding:20px 22px;border-radius:var(--radius);margin:24px 0}
+.decision p:last-child{margin-bottom:0}
+.decision-title{color:var(--accent);font-weight:600;margin-bottom:6px}
+.warning{background:oklch(0.95 0.025 25);border-color:oklch(0.86 0.07 25)}
+.tags{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 22px}
+.tag{display:inline-flex;align-items:center;min-height:28px;padding:3px 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface-raised);font:12px/1.4 Menlo,Monaco,monospace;color:var(--text-heading)}
+.grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;margin-block:22px}
+.grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-block:22px}
+.node{background:var(--surface-raised);border:1px solid var(--border);border-radius:var(--radius);padding:18px;min-width:0}
+.node h3,.node h4{margin:0 0 8px}
+.node p{font-size:14px;line-height:1.6;margin:0}
+.node .mono{font-family:Menlo,Monaco,monospace;color:var(--link);font-size:12px;display:block;margin-bottom:8px}
+.arch{display:grid;grid-template-columns:1fr 28px 1fr 28px 1fr;align-items:stretch;gap:8px;margin:28px 0}
+.arch .arrow{display:flex;align-items:center;justify-content:center;color:var(--link);font-size:24px}
+.arch .stack{display:grid;gap:8px}
+.flow-panel{border-top:1px solid var(--border);padding-top:24px;margin-top:18px}
+.flow-panel[hidden]{display:none}
+.tabs{display:inline-flex;flex-wrap:wrap;gap:4px;padding:4px;background:oklch(0.89 0.008 260);border-radius:8px;margin-block:12px 22px}
+.tab{border:0;background:transparent;color:var(--text-heading);padding:9px 14px;min-height:44px;border-radius:5px;transition:background .15s ease-out,color .15s ease-out}
+.tab[aria-selected="true"]{background:var(--surface-raised);color:var(--accent);box-shadow:0 1px 3px oklch(0.3 0.02 260 / .12)}
+.sequence{list-style:none;margin:20px 0;padding:0;counter-reset:step}
+.sequence li{counter-increment:step;position:relative;padding:0 0 22px 42px;margin:0}
+.sequence li:before{content:counter(step);position:absolute;left:0;top:2px;width:26px;height:26px;border:1px solid var(--accent);color:var(--accent);display:grid;place-items:center;font:12px Menlo,Monaco,monospace;background:var(--surface)}
+.sequence li:not(:last-child):after{content:"";position:absolute;left:13px;top:32px;bottom:4px;width:1px;background:var(--border)}
+.code-wrap{position:relative;margin-block:18px 26px;border:2px solid oklch(0.90 0.008 260);border-radius:var(--radius);background:var(--code-bg);overflow:hidden}
+.code-title{padding:8px 14px;border-bottom:1px solid var(--border);font:12px Menlo,Monaco,monospace;color:var(--text-muted)}
+pre{padding:18px;overflow:auto;max-height:620px;tab-size:2}
+.copy-btn{position:absolute;right:10px;top:42px;border:1px solid var(--border);background:var(--surface-raised);color:var(--text-heading);padding:6px 10px;border-radius:4px;font-size:12px;min-height:44px}
+.copy-btn:hover{background:var(--surface)}
+.table-scroll{overflow:auto;margin-block:20px 26px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface-raised)}
+table{border-collapse:collapse;width:100%;min-width:680px;font-size:14px;line-height:1.55}
+caption{text-align:left;padding:12px 14px;font-weight:600;color:var(--text-heading);border-bottom:1px solid var(--border)}
+th,td{padding:12px 14px;text-align:left;vertical-align:top;border-bottom:1px solid var(--border)}
+th{color:var(--text-heading);background:var(--surface-code);font-weight:600}
+tr:last-child td{border-bottom:0}
+td code{white-space:nowrap}
+.file-tree{white-space:pre;font-size:13px;line-height:1.65}
+details.ref{border-top:1px solid var(--border);padding:0;margin:0}
+details.ref:last-child{border-bottom:1px solid var(--border)}
+details.ref summary{cursor:pointer;padding:15px 0;color:var(--text-heading);font-weight:600}
+details.ref summary::marker{color:var(--link)}
+details.ref .details-body{padding:0 0 18px 20px}
+details.ref .details-body p:last-child{margin-bottom:0}
+.status{font:12px Menlo,Monaco,monospace;white-space:nowrap;color:var(--text-heading)}
+.status:before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--link);margin-right:7px}
+.status.wait:before{background:oklch(0.68 0.15 75)}
+.status.stop:before{background:var(--danger)}
+.small{font-size:13px;color:var(--text-muted)}
+.checklist{list-style:none;margin-left:0;padding-left:0}
+.checklist li{padding-left:26px;position:relative}
+.checklist li:before{content:"";position:absolute;left:2px;top:.72em;width:10px;height:5px;border-left:2px solid var(--accent);border-bottom:2px solid var(--accent);transform:rotate(-45deg)}
+.discussion-item{display:grid;grid-template-columns:110px 1fr;gap:18px;padding:20px 0;border-top:1px solid var(--border)}
+.discussion-item:last-child{border-bottom:1px solid var(--border)}
+.discussion-item .label{font:12px Menlo,Monaco,monospace;color:var(--link);padding-top:4px}
+.discussion-item h3{margin:0 0 8px}
+.footer{border-top:1px solid var(--border);padding:30px 0 50px;font-size:13px;color:var(--text-muted)}
+.footer-inner{width:min(70rem,94vw);margin:auto;display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,12px);background:var(--text-heading);color:var(--surface);padding:9px 14px;border-radius:5px;opacity:0;pointer-events:none;transition:opacity .15s ease-out,transform .15s ease-out;z-index:40;font-size:14px}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+@media (max-width:760px){
+  .hero{padding:52px 0 42px}
+  .hero .kicker{font-size:11px;letter-spacing:.1em}
+  .hero h1{max-width:12ch}
+  .wrap{width:min(100% - 32px,46rem)}
+  .breakout{width:94vw;margin-inline:calc((100% - 94vw)/2)}
+  .grid-2,.grid-3{grid-template-columns:1fr}
+  .arch{grid-template-columns:1fr}
+  .arch .arrow{transform:rotate(90deg);min-height:28px}
+  .section{padding-top:42px}
+  .discussion-item{grid-template-columns:1fr;gap:6px}
+  .toc-panel{grid-template-columns:1fr;max-height:70vh;overflow:auto}
+  .print-btn{padding-inline:10px;font-size:13px}
+  th,td{padding:10px 12px}
+}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
+@media print{
+  .doc-nav,.progress,.copy-btn,.tabs,.toast,.print-btn{display:none!important}
+  .hero{background:none;color:var(--text);padding:20px 0}
+  .hero h1,.hero .lede{color:var(--text)}
+  .hero-meta{border-color:var(--border)}
+  .wrap,.breakout,.hero-inner{width:100%;max-width:none;margin:0}
+  .section{break-inside:auto;padding-top:30px}
+  .node,.code-wrap,.decision,table{break-inside:avoid}
+  .flow-panel[hidden]{display:block}
+  .flow-panel:before{content:attr(data-print-title);display:block;font-weight:600;margin-bottom:12px}
+  a{color:var(--text);text-decoration:none}
+}
+</style>
+</head>
+<body id="top">
+<div class="progress" aria-hidden="true"><span id="progressBar"></span></div>
+<header class="hero">
+  <div class="hero-inner">
+    <div class="kicker">Implementation plan · v0.2 · 2026-11-07</div>
+    <h1>轻量 AI 客服产品</h1>
+    <p class="lede">本文档描述轻量 AI 客服产品的技术设计与实施计划，范围包括商户后台、管理员后台、平台模型配置、配置 Agent、可版本化 Skill、非流式 Chat API、人工接管、Langfuse 及 Docker Compose 部署。</p>
+    <div class="hero-meta">
+      <span>前后端分离</span><span>Agent Skills 原生加载</span><span>完整 JSON 响应</span><span>Docker Compose 统一部署</span>
+    </div>
+  </div>
+</header>
+<nav class="doc-nav" aria-label="文档工具栏">
+  <div class="nav-inner">
+    <details class="toc" id="toc">
+      <summary>文档目录</summary>
+      <div class="toc-panel">
+        <a href="#summary">01　文档概述</a>
+        <a href="#architecture">02　总体设计</a>
+        <a href="#product">03　功能与页面设计</a>
+        <a href="#admin">04　管理员与平台配置</a>
+        <a href="#configuration">05　配置 Agent 设计</a>
+        <a href="#runtime">06　运行时 Agent 设计</a>
+        <a href="#api">07　接口设计</a>
+        <a href="#data">08　数据与存储设计</a>
+        <a href="#observability">09　可观测性设计</a>
+        <a href="#security">10　安全设计</a>
+        <a href="#deployment">11　Docker Compose 部署</a>
+        <a href="#delivery">12　实施计划与验收</a>
+        <a href="#discussion">13　待确认设计参数</a>
+        <a href="#sources">14　参考资料</a>
+      </div>
+    </details>
+    <button class="print-btn" id="printButton" type="button">打印／导出 PDF</button>
+  </div>
+</nav>
+<main>
+<section class="section wrap" id="summary">
+  <span class="section-no">01 / OVERVIEW</span>
+  <h2>文档概述</h2>
+  <p class="lead">本方案采用 <strong>React＋Hono＋Deep Agents（LangChain／LangGraph）＋PostgreSQL＋Redis</strong>。Agent 运行在独立 Worker 中；官网、商户后台与管理员后台共用独立前端工程，Hono 提供 REST API，BullMQ 负责排队与并发控制，Langfuse 记录完整运行链路，全部组件通过 Docker Compose 统一部署。</p>
+  <h3>首期功能范围</h3>
+  <ol>
+    <li>商户注册、登录、输入邀请码获得可用权益。</li>
+    <li>一键创建客服，进入聊天式配置；可上传多文件。</li>
+    <li>配置 Agent 按优先级补齐信息，生成并校验客服 Skill，达到最低条件后自动置为“可用”。</li>
+    <li>商户创建 API Key，通过客服 ID＋Key 调用非流式 <code>/chat</code>。</li>
+    <li>运行时 Agent 只读当前 Skill，通过 <code>response</code> 回复，通过 <code>ask_human</code> 请求人工。</li>
+    <li>商户可测试、查看求助、选择建议回复或接管会话；Langfuse 可还原完整运行链路。</li>
+    <li>管理员统一管理商户、客服、邀请码和平台 LLM Provider／模型，关键操作保留审计记录。</li>
+    <li>应用、PostgreSQL、Redis、文件存储与 Langfuse 通过 Docker Compose 一键启动，并使用命名卷持久化。</li>
+  </ol>
+  <h3>非首期范围</h3>
+  <div class="tags">
+    <span class="tag">在线支付</span><span class="tag">OCR</span><span class="tag">向量数据库</span><span class="tag">团队 RBAC</span><span class="tag">Shell／代码执行</span><span class="tag">商户自带模型 Key</span><span class="tag">原始思维链</span><span class="tag">嵌入式聊天插件</span>
+  </div>
+  <p class="small">文档中的时间上限、目录与字段为设计默认值，可在评审后调整。本轮交付内容为技术设计与实现计划，不包含产品 MVP 代码或可安装的 Skill 包。</p>
+</section>
+<section class="section wrap" id="architecture">
+  <span class="section-no">02 / ARCHITECTURE</span>
+  <h2>技术选型与进程边界</h2>
+  <div class="table-scroll breakout" tabindex="0" aria-label="技术选型表，可横向滚动">
+    <table>
+      <caption>推荐技术栈</caption>
+      <thead><tr><th>层</th><th>选型</th><th>职责与理由</th></tr></thead>
+      <tbody>
+        <tr><td>Web</td><td><code>React · TypeScript · Vite</code><br>Tailwind／shadcn/ui</td><td>官网、商户后台、管理员看板、配置聊天、测试台和人工会话台；构建为静态资源，与 API 分离部署。</td></tr>
+        <tr><td>API</td><td><code>Node.js · Hono · Zod</code></td><td>轻量 REST、商户与管理员会话认证、API Key 鉴权、文件上传、平台配置和运行状态查询；OpenAPI 由共享 Schema 生成。</td></tr>
+        <tr><td>Agent</td><td><code>deepagents · LangChain.js · LangGraph.js</code></td><td>原生 Agent Skills、固定 Skill、虚拟文件工具、工具调用与持久化执行；模型保持可替换。</td></tr>
+        <tr><td>数据</td><td><code>PostgreSQL · Drizzle</code></td><td>商户、客服、Skill 版本、消息、Run、API Key、人工工单；同时承载 LangGraph Checkpointer。</td></tr>
+        <tr><td>队列</td><td><code>Redis · BullMQ</code></td><td>全局／商户／客服三级并发限制、延时等待、重试和 Worker 解耦。</td></tr>
+        <tr><td>文件</td><td><code>StorageAdapter</code></td><td>首期写入后端持久卷特定目录；接口保持不变，后续可切换 S3 兼容对象存储。</td></tr>
+        <tr><td>观测</td><td><code>@langfuse/langchain · @langfuse/tracing</code></td><td>LangChain Callback 捕获模型与工具，外层 Span 补齐鉴权、排队、Skill 加载、等待和人工接管。</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Deep Agents 的 JavaScript 文档明确提供 Skills、虚拟文件系统、权限、持久化执行和流式事件；Skills 支持按三级渐进披露加载，也支持在已知场景下固定加载。<a href="#source-1">[官方资料 1]</a><a href="#source-2">[2]</a> 每个运行时客服仅绑定一个 Skill，因此采用<strong>固定加载当前版本</strong>，不执行 Skill 自动选择。</p>
+  <div class="breakout" aria-label="系统架构图">
+    <div class="arch">
+      <div class="node"><span class="mono">apps/web</span><h3>独立前端</h3><p>官网、注册登录、商户后台、管理员看板、配置聊天、测试台、API Key、人工接管。</p></div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="node"><span class="mono">apps/api</span><h3>Hono API</h3><p>认证与租户鉴权、管理员接口、平台 LLM 配置、文件接收、Run 创建、状态查询与 SSE 测试。</p></div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="stack">
+        <div class="node"><span class="mono">apps/worker</span><h3>Agent Worker</h3><p>Deep Agents、Skill 加载、工具执行、模型调用、发布与响应。</p></div>
+        <div class="node"><span class="mono">infrastructure</span><h3>数据与观测</h3><p>PostgreSQL、Redis、持久卷／S3、Langfuse。</p></div>
+      </div>
+    </div>
+  </div>
+  <h3>API 与 Worker 的职责划分</h3>
+  <p>API 进程负责请求校验、Run 创建、状态查询与结果等待；Worker 进程负责模型生成、工具执行、<code>sleep</code> 等待和人工中断。该拆分用于隔离 Web 请求处理与 Agent 执行，并支持独立并发控制及 Worker 故障恢复。</p>
+  <h3>代码目录结构</h3>
+  <div class="code-wrap breakout"><div class="code-title">项目结构</div><button class="copy-btn" type="button">复制</button><pre><code>apps/
+  web/                  # React 官网、商户后台与管理员后台
+  api/                  # Hono REST、认证、上传、SSE、平台配置
+  worker/               # 配置 Agent、运行时 Agent、延时任务
+packages/
+  contracts/            # Zod Schema、API 类型、事件类型
+  db/                   # Drizzle Schema 与迁移
+  agent/                # Agent 工厂、模型工厂、工具、Skill 加载
+  storage/              # Local／S3 StorageAdapter
+skills/
+  create-customer-service/
+    SKILL.md
+    references/
+    assets/
+deploy/                   # PostgreSQL 初始化、Nginx 与部署脚本
+docker-compose.yml        # 应用与 Langfuse 统一编排
+.env.example              # 部署参数模板，不含真实密钥
+storage/                # 本地开发持久目录，不提交用户文件</code></pre></div>
+  <div class="decision warning">
+    <div class="decision-title">文件系统访问约束</div>
+    <p>Deep Agents 官方生产指南不建议在 Web 服务中直接使用宿主 FilesystemBackend。<a href="#source-3">[官方资料 3]</a> 本方案让模型只看到每客服独立的虚拟根目录；物理路径由服务端解析，禁止 <code>..</code>、绝对路径和跨客服访问。首期可在隔离 Worker 容器中挂载仅含业务文件的持久卷，不提供 Shell。</p>
+  </div>
+</section>
+<section class="section wrap" id="product">
+  <span class="section-no">03 / FUNCTIONAL DESIGN</span>
+  <h2>功能与页面设计</h2>
+  <div class="table-scroll breakout" tabindex="0" aria-label="页面清单，可横向滚动">
+    <table>
+      <caption>首期页面清单</caption>
+      <thead><tr><th>页面</th><th>核心内容</th><th>主要操作</th></tr></thead>
+      <tbody>
+        <tr><td><code>/</code></td><td>产品官网、能力说明、使用入口</td><td>登录、注册；不做营销复杂度</td></tr>
+        <tr><td><code>/register</code>、<code>/login</code></td><td>邮箱／账号＋密码</td><td>注册、登录、退出；无人机验证</td></tr>
+        <tr><td><code>/activate</code></td><td>邀请码购买页</td><td>提交邀请码，生成已激活权益；无支付</td></tr>
+        <tr><td><code>/dashboard</code></td><td>我的全部 AI 客服</td><td>查看配置中／可用／停用状态；一键创建</td></tr>
+        <tr><td><code>/services/:id/configure</code></td><td>干净聊天框、静态上传提示、文件列表、必要信息进度</td><td>发送文本、多文件上传、继续补充配置</td></tr>
+        <tr><td><code>/services/:id/test</code></td><td>左侧测试聊天，右侧执行事件时间线</td><td>选择草稿／当前版本、流式测试、清空测试会话</td></tr>
+        <tr><td><code>/services/:id/keys</code></td><td>Key 名称、前缀、创建／最后使用时间</td><td>创建、复制一次、吊销</td></tr>
+        <tr><td><code>/services/:id/handoffs</code></td><td>待处理求助、会话上下文、AI 建议回复</td><td>选择建议并发送、直接接管、交还 AI</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>“创建 AI 客服”操作不设置额外表单。服务端创建默认名称、配置线程和草稿 Skill 后跳转至配置页，客服名称可在后续配置过程中修改。</p>
+  <div class="tabs breakout" role="tablist" aria-label="核心产品流程">
+    <button class="tab" id="tab-onboard" role="tab" aria-selected="true" aria-controls="flow-onboard" data-flow="onboard" type="button">开通与创建</button>
+    <button class="tab" id="tab-config" role="tab" aria-selected="false" aria-controls="flow-config" data-flow="config" type="button">聊天式配置</button>
+    <button class="tab" id="tab-human" role="tab" aria-selected="false" aria-controls="flow-human" data-flow="human" type="button">服务与人工</button>
+  </div>
+  <div class="breakout">
+    <div class="flow-panel" id="flow-onboard" role="tabpanel" aria-labelledby="tab-onboard" data-flow-panel="onboard" data-print-title="开通与创建">
+      <ol class="sequence">
+        <li><strong>注册并登录。</strong>密码使用 Argon2id 哈希，会话写入 HttpOnly Cookie；首期无需邮箱验证。</li>
+        <li><strong>邀请码激活。</strong>事务内校验有效期、剩余次数和商户是否已激活，写购买记录与权益；不涉及支付。</li>
+        <li><strong>一键创建。</strong>写入客服记录、配置线程、草稿 Skill v1，初始状态为 <code>configuring</code>。</li>
+        <li><strong>进入配置。</strong>页面展示固定上传提示与 Agent 首条引导，不要求先填表。</li>
+      </ol>
+    </div>
+    <div class="flow-panel" id="flow-config" role="tabpanel" aria-labelledby="tab-config" data-flow-panel="config" data-print-title="聊天式配置" hidden>
+      <ol class="sequence">
+        <li><strong>接收输入。</strong>文本进入配置会话；文件先落原始目录，再异步生成文本副本和解析报告。</li>
+        <li><strong>配置 Agent 分析差距。</strong>固定加载 <code>create-customer-service</code>，读取已有草稿、聊天和行业提问参考。</li>
+        <li><strong>每轮只问最重要的 1–2 个问题。</strong>优先身份、业务对象、服务范围与边界，避免问卷式轰炸。</li>
+        <li><strong>更新草稿。</strong>把已确认信息写入 role、business_context、rules 和对应 references；未知项明确标记，不编造。</li>
+        <li><strong>确定性校验并发布。</strong>最低条件满足后生成不可变 Skill 版本，原子切换 active 指针，客服状态改为 <code>ready</code>；之后仍可继续补充。</li>
+      </ol>
+    </div>
+    <div class="flow-panel" id="flow-human" role="tabpanel" aria-labelledby="tab-human" data-flow-panel="human" data-print-title="服务与人工" hidden>
+      <ol class="sequence">
+        <li><strong>外部调用。</strong>调用方以客服 ID＋API Key 提交新消息和客户端生成的 request_id。</li>
+        <li><strong>排队与执行。</strong>原 <code>/chat</code> 请求保持等待；调用方可用同一 request_id 查询 queued／running 等状态。</li>
+        <li><strong>完整 JSON 返回。</strong>正常回复、等待人工、被新消息取代或失败均为明确 JSON，不推送 Token 流。</li>
+        <li><strong>人工介入。</strong><code>ask_human</code> 创建求助并暂停 AI；商户在后台选择建议回复或接管。</li>
+        <li><strong>恢复。</strong>建议回复发送后可恢复 AI；接管期间由人工回复，直到商户点击“交还 AI”。</li>
+      </ol>
+    </div>
+  </div>
+</section>
+<section class="section wrap" id="admin">
+  <span class="section-no">04 / ADMINISTRATION DESIGN</span>
+  <h2>管理员与平台配置设计</h2>
+  <p class="lead">管理员端与商户端共用 Web 前端工程和 API 服务，采用独立路由、独立权限守卫与独立登录入口。管理员账号不开放公开注册，初始账号由部署环境变量创建。</p>
+  <h3>管理员功能范围</h3>
+  <div class="table-scroll breakout" tabindex="0" aria-label="管理员页面清单，可横向滚动">
+    <table>
+      <caption>管理员页面与操作</caption>
+      <thead><tr><th>页面</th><th>数据展示</th><th>管理操作</th></tr></thead>
+      <tbody>
+        <tr><td><code>/admin</code></td><td>商户数、客服数、运行中／排队 Run、待处理人工求助、LLM 与 Langfuse 健康状态</td><td>查看平台概览，跳转对应管理页</td></tr>
+        <tr><td><code>/admin/users</code></td><td>账号、状态、激活权益、客服数量、注册与最近登录时间</td><td>搜索、启用、停用、重置密码、查看购买与邀请码记录</td></tr>
+        <tr><td><code>/admin/users/:id</code></td><td>商户资料、权益、全部客服与用量摘要</td><td>管理该账号及其客服；不显示明文密码或 API Key</td></tr>
+        <tr><td><code>/admin/services</code></td><td>客服名称、所属商户、就绪状态、active Skill、模型、Run 与错误摘要</td><td>搜索、强制停用、恢复、软删除、吊销 API Key、查看只读配置摘要</td></tr>
+        <tr><td><code>/admin/invites</code></td><td>邀请码前缀、次数、有效期、使用记录与状态</td><td>生成、设置权益、停用；完整邀请码仅在生成时显示</td></tr>
+        <tr><td><code>/admin/llm</code></td><td>Provider、Base URL、模型、能力、默认场景、连接状态</td><td>新增、编辑、测试连接、启停、设置默认模型</td></tr>
+        <tr><td><code>/admin/settings</code></td><td>队列并发、文件限制、请求超时、存储与 Langfuse 状态</td><td>修改运行参数；基础设施密钥仅显示配置状态，不支持页面查看</td></tr>
+        <tr><td><code>/admin/audit-logs</code></td><td>操作者、动作、资源、时间、结果与关联 request_id</td><td>筛选与导出审计记录</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h3>用户与客服管理规则</h3>
+  <ul>
+    <li>停用商户后，该商户的登录会话失效，其全部客服停止接受新 Run；已有数据与文件保留。</li>
+    <li>管理员强制停用客服时，运行中的 Run 按当前状态完成或安全取消，新请求返回 <code>409 service_disabled</code>。</li>
+    <li>删除商户或客服采用软删除，默认不物理删除消息、Skill 与审计记录；物理清理由单独的保留策略执行。</li>
+    <li>管理员默认查看配置摘要、状态和用量，不默认展示商户文件正文及终端用户会话内容。</li>
+    <li>所有状态修改、密码重置、Key 吊销和模型配置变更写入管理员审计日志。</li>
+  </ul>
+  <h3>LLM Provider 与模型配置</h3>
+  <div class="table-scroll breakout" tabindex="0" aria-label="模型配置字段，可横向滚动">
+    <table>
+      <caption>平台级模型配置项</caption>
+      <thead><tr><th>对象</th><th>配置字段</th><th>处理规则</th></tr></thead>
+      <tbody>
+        <tr><td><code>llm_providers</code></td><td>名称、类型、base_url、api_key、组织／项目等提供商参数、启用状态</td><td>支持 OpenAI 兼容、Anthropic、Gemini；API Key 加密入库，接口仅返回掩码</td></tr>
+        <tr><td><code>llm_models</code></td><td>provider_id、模型 ID、显示名、上下文上限、工具调用、视觉、JSON、推理摘要能力</td><td>模型 ID 支持手工录入；提供商支持时再自动发现，能力由管理员确认并用于运行时校验</td></tr>
+        <tr><td><code>model_assignments</code></td><td>场景、model_id、优先级、启用状态</td><td>分别设置配置 Agent 与运行时 Agent 的平台默认模型，可选按客服覆盖</td></tr>
+        <tr><td>连接测试</td><td>Provider、模型 ID、测试类型</td><td>先校验凭据与网络，再执行最小工具调用请求；不支持模型列表接口时仍允许手工配置</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>模型解析顺序为“客服场景覆盖配置 → 平台场景默认配置 → 返回明确的未配置错误”。配置 Agent 与运行时 Agent 可分别使用不同模型。每个 Run 记录实际使用的 model_id、Provider 配置版本和模型能力快照，便于复现与审计。</p>
+  <div class="decision warning">
+    <div class="decision-title">LLM 密钥保护要求</div>
+    <p>API Key 使用 AES-256-GCM 加密存储，主密钥通过 <code>MODEL_CONFIG_ENCRYPTION_KEY</code> 环境变量注入。只有 API 的测试连接逻辑和 Worker 的模型工厂可在服务端解密；浏览器、商户接口、Langfuse metadata 与普通日志均不得包含明文。</p>
+  </div>
+  <h3>管理员接口</h3>
+  <div class="code-wrap breakout"><div class="code-title">/api/admin/* 接口分组</div><button class="copy-btn" type="button">复制</button><pre><code>GET  /api/admin/overview
+GET  /api/admin/users
+GET  /api/admin/users/{userId}
+POST /api/admin/users/{userId}/disable
+POST /api/admin/users/{userId}/enable
+POST /api/admin/users/{userId}/password-reset
+DELETE /api/admin/users/{userId}
+GET  /api/admin/customer-services
+POST /api/admin/customer-services/{serviceId}/disable
+POST /api/admin/customer-services/{serviceId}/enable
+POST /api/admin/customer-services/{serviceId}/revoke-keys
+DELETE /api/admin/customer-services/{serviceId}
+GET|POST /api/admin/invites
+POST /api/admin/invites/{inviteId}/disable
+GET  /api/admin/invites/{inviteId}/redemptions
+GET|POST /api/admin/llm/providers
+PATCH|DELETE /api/admin/llm/providers/{providerId}
+POST /api/admin/llm/providers/{providerId}/test
+GET|POST /api/admin/llm/models
+PATCH|DELETE /api/admin/llm/models/{modelId}
+POST /api/admin/llm/models/{modelId}/test
+GET|PUT /api/admin/llm/defaults/{scenario}
+GET|PUT /api/admin/settings
+GET  /api/admin/audit-logs</code></pre></div>
+  <p>所有管理员接口使用独立的 <code>requireAdmin</code> 守卫和 Zod 输入校验。DELETE 在首期均表示停用或软删除，不直接物理删除数据。</p>
+</section>
+<section class="section wrap" id="configuration">
+  <span class="section-no">05 / CONFIGURATION DESIGN</span>
+  <h2>配置 Agent 与 Skill 生成设计</h2>
+  <p class="lead">配置 Agent 是“客服 Skill 的采访者、编辑与发布者”，不是最终客服。它负责发现缺口、读取资料、组织文本、维护草稿并触发发布；运行时客服只获得只读权限。</p>
+  <div class="decision">
+    <div class="decision-title">配置页固定静态提示</div>
+    <p>“直接描述你的公司和产品即可。也可以上传产品手册、价格表、FAQ、售后政策等文件；支持多文件。图片暂不做 OCR，多模态模型可直接读取支持的图片。”</p>
+  </div>
+  <h3>配置 Skill 目录结构</h3>
+  <div class="code-wrap breakout"><div class="code-title">skills/create-customer-service/</div><button class="copy-btn" type="button">复制</button><pre><code>create-customer-service/
+├── SKILL.md
+├── references/
+│   ├── interview-playbook.md       # 差距分析、提问顺序、追问与跳过策略
+│   ├── readiness-contract.md       # P0／P1／P2 字段、可用条件、保守兜底
+│   ├── output-contract.md          # 生成 Skill 的结构、索引与校验规则
+│   ├── file-normalization.md       # 文件分类、文本化、来源映射、失败处理
+│   ├── industry-ecommerce.md       # 电商零售
+│   ├── industry-saas.md            # 软件与 SaaS
+│   ├── industry-education.md       # 教育培训
+│   ├── industry-local-service.md   # 本地生活、预约、旅游
+│   ├── industry-b2b.md             # B2B、制造与批发
+│   ├── industry-healthcare.md      # 医疗健康的高风险边界
+│   └── industry-finance.md         # 金融保险的高风险边界
+├── assets/
+│   └── service-skill-template/     # 可复制的初始 SKILL.md 与目录模板
+└── scripts/
+    └── validate-skill.mjs          # 确定性结构、链接、字段与空文件校验</code></pre></div>
+  <p class="small">本规划采用单层 references 索引，避免行业文档互相引用形成深层跳转。校验脚本由 VALIDATE／PUBLISH 工具在服务端以固定参数调用，只操作当前客服草稿；Agent 不能执行任意命令。</p>
+  <h3>SKILL.md 内容设计</h3>
+  <div class="code-wrap breakout"><div class="code-title">create-customer-service/SKILL.md 内容骨架</div><button class="copy-btn" type="button">复制</button><pre><code>---
+name: create-customer-service
+description: 创建、补全、校验并发布商户 AI 客服 Skill。用于客服初始化、资料整理、配置采访、知识补充与规则更新。
+---
+
+# Create Customer Service
+
+## 目标
+把商户输入与文件整理成可运行、可追溯、不过度承诺的客服 Skill。
+所有事实必须来自商户明确输入或上传资料；不知道就标记 unknown。
+
+## 每次执行
+1. 读取当前草稿 SKILL.md、数据库中的 readiness 状态和本次新增消息／文件索引。
+2. 判断公司与产品类别，只读取最相关的一份 industry-*.md。
+3. 合并已有事实，生成缺口列表；不要重复询问已经回答或被跳过的项。
+4. 按 P0 → P1 → P2 排序，每轮最多问 1–2 个相关问题。
+5. 将确认信息写入 role、business_context、rules 或合适的 references。
+6. 运行校验；满足 P0 可用条件时发布新版本，否则输出下一个最重要的问题。
+
+## 采访约束
+- 先利用文件和聊天答案，再提问；不要把资料阅读变成商户的作业。
+- 优先开放式问题，再给简短示例；一次不要跨多个主题。
+- 用户拒绝、不知道或暂不回答时，记录 unknown／deferred 并继续。
+- 不因追求“完整”而阻塞可用状态；缺少事实时使用保守回复与人工兜底。
+- 高风险行业只补充边界问题，不生成诊断、承诺收益等专业规则。
+
+## 发布条件
+SKILL.md 结构有效、索引目标存在、P0 检查通过、references 非空且有来源。
+发布由服务端事务完成；Agent 不直接修改 active 指针。
+
+## 资源索引
+[逐个列出上述 references，写明“何时读取”与“包含什么”。]</code></pre></div>
+  <h3>客服 Skill 实例结构</h3>
+  <div class="code-wrap breakout"><div class="code-title">客服实例的不可变版本目录</div><button class="copy-btn" type="button">复制</button><pre><code>services/{serviceId}/versions/{version}/
+├── SKILL.md                       # 精炼指令＋资源目录索引
+├── references/
+│   ├── company.md                 # 公司、品牌、服务对象
+│   ├── products.md                # 产品／服务与通用业务上下文
+│   ├── policies.md                # 价格、交付、退换、售后等已确认政策
+│   ├── faq.md                     # 已确认问答与标准口径
+│   ├── conversation-rules.md      # 详细服务边界与升级规则
+│   ├── source-{uploadId}.md       # 每个可文本化文件的规范化副本
+│   └── source-index.md            # 来源、解析状态、适用范围、更新时间
+└── assets/
+    └── originals/                 # 所有上传原文件，包括图片与扫描件</code></pre></div>
+  <p>生成的 <code>SKILL.md</code> 只保留身份、职责、通用上下文、核心规则、运行时输出约束和资源索引。详细知识全部平摊到 references；原文件统一保留在 assets。该结构支持按需加载，并保留答案与资料来源之间的追溯关系。</p>
+  <h3>配置项优先级与就绪条件</h3>
+  <div class="table-scroll breakout" tabindex="0" aria-label="配置优先级表，可横向滚动">
+    <table>
+      <caption>用缺口驱动提问，而不是固定长问卷</caption>
+      <thead><tr><th>优先级</th><th>需要知道什么</th><th>缺失时怎么处理</th><th>是否阻塞可用</th></tr></thead>
+      <tbody>
+        <tr><td><code>P0 必须</code></td><td>客服身份、公司／业务对象、主要产品或服务、负责范围、未知问题的人工兜底</td><td>先问最重要的 1–2 项；至少要知道“为谁、围绕什么业务服务”</td><td>是，但可使用明确的安全兜底</td></tr>
+        <tr><td><code>P1 重要</code></td><td>常见问题、价格／交付／售后政策、服务时间、联系方式、明确禁止事项</td><td>P0 后问；未回答就标记未知，回复时不得猜测</td><td>否</td></tr>
+        <tr><td><code>P2 增强</code></td><td>语气、示例对话、品牌词、复杂产品细节、促销与增值规则</td><td>后台持续补充，不主动拉长首次配置</td><td>否</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="decision">
+    <div class="decision-title">最低就绪条件</div>
+    <p>客服身份与业务对象不能完全为空；服务范围未知时默认“仅根据已有资料回答，其他问题转人工”；事实缺失时默认“不知道并升级”，而不是继续追问商户。通过校验后立即发布 v1 并置为可用。P1／P2 后续每轮更新都可生成新版本，但旧版本保持在线直到新版本校验通过。</p>
+  </div>
+  <h3>行业参考文档的使用方式</h3>
+  <p>行业文档只负责提醒 Agent 还应该了解什么，不提供某家商户的事实，也不直接成为运行时客服的答案。配置 Agent 判断类别后只读最相关的一份；跨行业时可再读第二份，避免全部装入上下文。</p>
+  <details class="ref"><summary>电商零售：订单、商品、履约与售后</summary><div class="details-body"><p>追问商品／订单信息来源、库存与价格是否会变化、发货范围、物流时效、退换条件、优惠叠加、发票和售后升级。若没有订单工具，运行时必须明确“无法查询实时订单”，不能假装已查询。</p></div></details>
+  <details class="ref"><summary>软件／SaaS：账号、订阅、功能与故障</summary><div class="details-body"><p>追问产品版本、套餐差异、账号与权限、试用／续费／退款、数据导入导出、支持渠道、故障升级和服务时间。区分公开产品知识与需要登录后才能查询的租户数据。</p></div></details>
+  <details class="ref"><summary>教育培训：课程、报名、学习与退费</summary><div class="details-body"><p>追问课程对象、开课形式、时间表、报名门槛、价格、试听、退费、证书与学习平台问题；不得承诺录取、就业或考试结果。</p></div></details>
+  <details class="ref"><summary>本地服务／旅游：预约、门店、改取消与库存</summary><div class="details-body"><p>追问服务区域、门店／地址、可预约时间、价格单位、取消改期、到场规则、突发关闭与人工联系方式。没有实时库存工具时不得确认可预约。</p></div></details>
+  <details class="ref"><summary>B2B／制造：规格、报价、交期与定制</summary><div class="details-body"><p>追问产品规格来源、最小起订量、报价有效期、交期、定制能力、样品、验收、质保与技术支持。引导客服收集线索，而不是自行承诺最终报价。</p></div></details>
+  <details class="ref"><summary>医疗健康／金融保险：只强化安全边界</summary><div class="details-body"><p>追问合法服务范围、人工资质、隐私与紧急升级流程。默认不做诊断、处方、投资建议或收益承诺；紧急情况应给出人工或当地紧急渠道指引。首期若无法验证合规要求，建议限制此类商户上线。</p></div></details>
+  <h3>文件解析与文本化设计</h3>
+  <div class="table-scroll breakout" tabindex="0" aria-label="文件处理策略，可横向滚动">
+    <table>
+      <caption>原文件与文本副本一一关联</caption>
+      <thead><tr><th>类型</th><th>处理方式</th><th>进入 references</th><th>运行时读取</th></tr></thead>
+      <tbody>
+        <tr><td>TXT／Markdown</td><td>编码与标题规范化，保留来源</td><td>清洗后的 Markdown</td><td>READ／GREP</td></tr>
+        <tr><td>PDF／Word</td><td>服务端提取段落与表格；扫描页标记未解析</td><td>按来源分文件，附页码／章节映射（可获得时）</td><td>READ；支持文档多模态时可读原件</td></tr>
+        <tr><td>Excel／CSV</td><td>逐工作表转 Markdown 表，大表分片并保留行号</td><td>表格文本＋字段说明＋分片索引</td><td>READ／GREP，不默认全量入提示词</td></tr>
+        <tr><td>图片</td><td>只检测格式与尺寸，不做 OCR</td><td>仅记录元数据与用途说明</td><td>模型支持图片时 READ 返回图像内容块；否则明确不可读</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>配置 Agent 根据解析报告决定下一步：文本充足则直接归纳；文本为空或图片不可读时，只询问最关键的内容，不要求商户重新整理全部资料。所有文件先进入当前草稿，发布时随版本固化，避免线上 Skill 读到尚未确认的半成品。</p>
+</section>
+<section class="section wrap" id="runtime">
+  <span class="section-no">06 / RUNTIME DESIGN</span>
+  <h2>运行时 Agent 设计</h2>
+  <p class="lead">每次生产 Run 都从数据库读取当前会话消息，加载客服的 active Skill 版本并固定加载，然后组装提示词。业务消息记录以 PostgreSQL 为准，LangGraph Checkpointer 用于执行恢复，不让框架隐式记忆替代会话数据。</p>
+  <div class="table-scroll breakout" tabindex="0" aria-label="Agent 工具权限，可横向滚动">
+    <table>
+      <caption>配置 Agent 与运行时 Agent 权限分离</caption>
+      <thead><tr><th>工具</th><th>配置 Agent</th><th>运行时 Agent</th><th>约束</th></tr></thead>
+      <tbody>
+        <tr><td><code>READ</code></td><td>允许</td><td>允许</td><td>只读当前草稿／active 版本；支持文本与模型能力范围内的多模态内容</td></tr>
+        <tr><td><code>GLOB</code></td><td>允许</td><td>允许</td><td>仅匹配当前 Skill 虚拟目录</td></tr>
+        <tr><td><code>GREP</code></td><td>允许</td><td>允许</td><td>仅检索文本化 references 与 SKILL.md</td></tr>
+        <tr><td><code>WRITE／EDIT</code></td><td>受限允许</td><td><strong>禁止</strong></td><td>配置 Agent 只能修改当前草稿，不允许改历史版本</td></tr>
+        <tr><td><code>VALIDATE／PUBLISH</code></td><td>受限允许</td><td><strong>禁止</strong></td><td>服务端固定执行校验脚本与发布事务，Agent 不能传任意命令或修改 active 指针</td></tr>
+        <tr><td><code>response</code></td><td>用于向商户输出配置问题</td><td>允许</td><td>唯一客户可见回复出口</td></tr>
+        <tr><td><code>ask_human</code></td><td>不需要</td><td>允许</td><td>创建人工求助并暂停当前会话的 AI</td></tr>
+        <tr><td><code>execute／Shell</code></td><td><strong>禁止</strong></td><td><strong>禁止</strong></td><td>首期没有代码执行需求，直接移除攻击面</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="small">Deep Agents 内置名称是 <code>read_file</code>／<code>glob</code>／<code>grep</code>；实现时可保留内部名称并用权限排除其他文件工具，或包装为产品约定的 READ／GLOB／GREP。实现时不得暴露写文件、任务子 Agent、规划和 Shell 等额外能力。</p>
+  <h3>response 工具设计</h3>
+  <div class="code-wrap breakout"><div class="code-title">工具参数约定</div><button class="copy-btn" type="button">复制</button><pre><code>response({
+  text: string,          // 要对客户发送的完整文本，禁止空字符串
+  sleep?: number         // 默认 0；只允许 0 或 2–30 的整数秒
+})
+
+ask_human({
+  reason: string,        // 为什么需要人工，简短、可审计
+  question: string,      // 当前需要人工判断或回答的问题
+  context_summary: string,
+  suggested_replies?: string[]  // 0–3 条，供商户选择，不得包含未确认事实
+})</code></pre></div>
+  <div class="table-scroll breakout" tabindex="0" aria-label="response 工具语义，可横向滚动">
+    <table>
+      <caption>非流式 /chat 下的工具语义</caption>
+      <thead><tr><th>调用</th><th>运行时动作</th><th>/chat 行为</th></tr></thead>
+      <tbody>
+        <tr><td><code>response(text, 0)</code></td><td>立即结束 Agent Loop，持久化回复</td><td>立即以完整 JSON 返回；“立即”指不附加等待，不是流式推送</td></tr>
+        <tr><td><code>response(text, sleep ≥ 2)</code></td><td>进入 <code>waiting_input</code>，创建一次性延时任务，暂停模型调用</td><td>请求保持；到期无新消息则返回 text，有补充消息则当前 Run 被取代</td></tr>
+        <tr><td><code>ask_human(...)</code></td><td>创建 Handoff，会话转为 <code>pending_human</code></td><td>返回 <code>waiting_for_human</code> JSON，不生成虚构答案</td></tr>
+        <tr><td>模型直接输出普通文本</td><td>视为内部输出，不直接发给客户</td><td>提示模型改用 response；达到次数上限则失败并告警</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><code>response</code> 每次 Run 最多生效一次，调用后模型不再继续执行其他工具。<code>sleep=1</code> 按约定无意义，参数校验直接拒绝；30 秒是首期建议上限，目的是避免代理与调用方的 HTTP 超时无限叠加。</p>
+  <h3>等待期间的新消息处理</h3>
+  <ol class="sequence">
+    <li>Run A 调用 <code>response("我再补充…", sleep=8)</code>，状态变为 <code>waiting_input</code>，保存待回复文本和到期时间。</li>
+    <li>若 8 秒内同一会话收到 Run B：追加新消息、取消 A 的定时器、把 A 标为 <code>superseded</code>；A 的长连接返回“已被新消息取代”的 JSON。</li>
+    <li>Run B 从服务端读取包含补充消息的完整记录，重新运行 Agent；B 的回复才是当前有效回复。</li>
+    <li>若到期没有新消息：A 原子检查状态仍为 <code>waiting_input</code>，持久化 text 并返回 <code>completed</code>。过期定时器不能覆盖已被取代的 Run。</li>
+  </ol>
+  <p>每个会话同一时间只允许一个“有效等待或执行中的 Run”。正在调用模型的 Run 不强行中断，新消息在同会话队列中等待；只有 <code>waiting_input</code> 可以被新消息取代，避免浪费已开始的模型生成。</p>
+  <h3>人工协助处理流程</h3>
+  <div class="grid-3 breakout">
+    <div class="node"><span class="mono">pending_human</span><h4>等待商户</h4><p>保留会话、求助原因、上下文摘要和建议回复；新客户消息仍入库，但不触发 AI。</p></div>
+    <div class="node"><span class="mono">assisted_reply</span><h4>选择建议并发送</h4><p>商户选择一条或编辑后发送，消息标记为人工辅助；随后可恢复 AI。</p></div>
+    <div class="node"><span class="mono">human_controlled</span><h4>直接接管</h4><p>商户在会话内自由回复，AI 完全暂停；点击“交还 AI”后才恢复自动处理。</p></div>
+  </div>
+</section>
+<section class="section wrap" id="api">
+  <span class="section-no">07 / API DESIGN</span>
+  <h2>Chat 接口与运行状态设计</h2>
+  <div class="decision">
+    <div class="decision-title">请求标识与状态查询</div>
+    <p>调用方在发起 <code>/chat</code> 前生成 UUID 作为 <code>request_id</code>。原请求保持等待完整结果；与此同时，调用方可用相同 request_id 调用状态接口，区分 <code>queued</code> 与 <code>running</code>。该设计保持 /chat 的完整 JSON 响应模式，无需改为 SSE，也无需在结果生成前返回响应体。</p>
+  </div>
+  <h3>Chat 请求与响应</h3>
+  <div class="code-wrap breakout"><div class="code-title">POST /v1/customer-services/{serviceId}/chat</div><button class="copy-btn" type="button">复制</button><pre><code>Authorization: Bearer cs_live_xxx
+Content-Type: application/json
+
+{
+  "request_id": "8c0a0ac2-2a4c-4a84-b6b0-3d52ea2f9f62",
+  "conversation_id": "your-stable-conversation-id",
+  "messages": [
+    { "role": "user", "content": "我想了解一下退货政策" }
+  ],
+  "metadata": {
+    "end_user_id": "optional-external-user-id"
+  }
+}</code></pre></div>
+  <p><code>messages</code> 定义为<strong>本次新增消息</strong>，通常为一条 user 消息，而不是每次重传全部历史。服务端根据 serviceId＋conversation_id 保存历史并组装提示词，避免客户端篡改历史。公开接口只接受 <code>role=user</code>；system、assistant 与工具消息均由服务端生成，不能由调用方注入。request_id 在同一客服下唯一，同时充当幂等键。</p>
+  <div class="code-wrap breakout"><div class="code-title">200 OK｜正常完成时才返回助手回复</div><button class="copy-btn" type="button">复制</button><pre><code>{
+  "request_id": "8c0a0ac2-2a4c-4a84-b6b0-3d52ea2f9f62",
+  "conversation_id": "your-stable-conversation-id",
+  "status": "completed",
+  "message": { "role": "assistant", "content": "签收后 7 天内……" },
+  "run": {
+    "skill_version": 3,
+    "trace_id": "3f0a…",
+    "started_at": "2026-11-06T10:00:02Z",
+    "finished_at": "2026-11-06T10:00:05Z"
+  }
+}</code></pre></div>
+  <h3>运行状态查询</h3>
+  <div class="code-wrap breakout"><div class="code-title">GET /v1/customer-services/{serviceId}/runs/{requestId}</div><button class="copy-btn" type="button">复制</button><pre><code>// 尚未获得 Worker 并发槽位，模型生成尚未开始
+{
+  "request_id": "8c0a0ac2-2a4c-4a84-b6b0-3d52ea2f9f62",
+  "state": "queued",
+  "queue_reason": "service_concurrency_limit",
+  "queue_position": 3,
+  "queued_at": "2026-11-06T10:00:00Z",
+  "started_at": null
+}
+
+// 后续同一接口可能返回
+// running | waiting_input | waiting_human | succeeded |
+// superseded | failed
+// succeeded 时可同时返回缓存的完整 result，供断线恢复。</code></pre></div>
+  <p>若队列容量已满，<code>/chat</code> 立即返回 <code>429</code> JSON、<code>queue_full</code> 和 <code>Retry-After</code>，这表示请求未被接受，而不是“已排队”。429 与 queued 必须明确区分。</p>
+  <div class="table-scroll breakout" tabindex="0" aria-label="Chat 终态响应，可横向滚动">
+    <table>
+      <caption>/chat 终态响应约定</caption>
+      <thead><tr><th>HTTP／status</th><th>含义</th><th>调用方处理</th></tr></thead>
+      <tbody>
+        <tr><td><code>200 completed</code></td><td>正常生成并持久化回复</td><td>展示 message</td></tr>
+        <tr><td><code>200 waiting_for_human</code></td><td>ask_human 已创建人工求助</td><td>展示“等待人工”及 handoff_id，不等待 AI 文本</td></tr>
+        <tr><td><code>200 human_controlled</code></td><td>商户正在人工接管，消息已接收</td><td>不期待 AI 回复，可继续查询会话</td></tr>
+        <tr><td><code>200 superseded</code></td><td>sleep 等待期间被同会话的新 Run 取代</td><td>丢弃旧回复，以新 request_id 的结果为准</td></tr>
+        <tr><td><code>401／403</code></td><td>Key 无效、吊销或与 serviceId 不匹配</td><td>停止重试，检查凭据</td></tr>
+        <tr><td><code>409 service_not_ready</code></td><td>客服尚未达到可用状态或已停用</td><td>先完成配置或启用</td></tr>
+        <tr><td><code>429 queue_full</code></td><td>未进入队列</td><td>按 Retry-After 重试，沿用同一 request_id</td></tr>
+        <tr><td><code>500 agent_failed</code></td><td>已进入运行但失败，记录 trace_id</td><td>有限重试；保留 request_id 防止重复追加消息</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h3>人工回复获取方式</h3>
+  <p>人工回复发生在另一次 HTTP 请求之后，无法塞进已经结束的 /chat 响应。因此补充公开接口 <code>GET /v1/customer-services/{serviceId}/conversations/{conversationId}/messages?after={messageId}</code>，使用同一 API Key 鉴权。调用方在收到 <code>waiting_for_human</code> 或 <code>human_controlled</code> 后轮询该接口，获取带 <code>role=assistant</code>、<code>author_type=human</code> 的新消息；首期不额外要求 Webhook。</p>
+  <h3>Run 状态机</h3>
+  <div class="code-wrap breakout"><div class="code-title">状态与所有权</div><button class="copy-btn" type="button">复制</button><pre><code>queued ───────────────→ running ───────────────→ succeeded
+  │                       │  │                        （completed）
+  │                       │  ├─ response(sleep≥2) → waiting_input
+  │                       │  │                         ├─ 到期 → succeeded
+  │                       │  │                         └─ 新消息 → superseded
+  │                       │  └─ ask_human → waiting_human
+  │                       └─ 错误 → failed
+  └─ 队列满则不创建 Run，直接 429
+
+每次状态迁移都带 expected_state 做原子更新；
+Worker 重启后由 DB／Checkpointer 恢复，延时任务必须幂等。</code></pre></div>
+  <h3>相关接口列表</h3>
+  <div class="table-scroll breakout" tabindex="0" aria-label="其他接口清单，可横向滚动">
+    <table>
+      <caption>商户接口使用会话 Cookie，公开接口使用 API Key</caption>
+      <thead><tr><th>方法</th><th>路径</th><th>用途</th></tr></thead>
+      <tbody>
+        <tr><td>POST</td><td><code>/api/auth/register</code>、<code>/login</code>、<code>/logout</code></td><td>账号密码与会话</td></tr>
+        <tr><td>POST</td><td><code>/api/activation/redeem</code></td><td>邀请码购买／激活</td></tr>
+        <tr><td>GET／POST</td><td><code>/api/customer-services</code></td><td>客服列表／一键创建</td></tr>
+        <tr><td>POST</td><td><code>/api/customer-services/:id/config/messages</code></td><td>配置聊天消息</td></tr>
+        <tr><td>POST／GET</td><td><code>/api/customer-services/:id/files</code></td><td>多文件上传／文件与解析状态</td></tr>
+        <tr><td>GET／POST／DELETE</td><td><code>/api/customer-services/:id/api-keys</code></td><td>Key 列表、创建、吊销</td></tr>
+        <tr><td>POST</td><td><code>/api/customer-services/:id/test-runs</code></td><td>独立测试接口，SSE 返回执行事件</td></tr>
+        <tr><td>GET</td><td><code>/v1/customer-services/:id/conversations/:cid/messages</code></td><td>公开会话消息增量查询，获取后续人工回复</td></tr>
+        <tr><td>GET／POST</td><td><code>/api/customer-services/:id/handoffs</code></td><td>求助列表、建议回复、接管与交还 AI</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h3>测试接口与事件流</h3>
+  <p>测试台使用商户会话鉴权，与生产 <code>/chat</code> 完全分开。可流式输出运行状态、工具调用、模型提供的<strong>推理摘要</strong>（若模型原生支持）和回复增量；不输出或伪造原始 Chain-of-Thought。</p>
+  <div class="code-wrap breakout"><div class="code-title">POST /api/customer-services/:id/test-runs｜SSE 事件</div><button class="copy-btn" type="button">复制</button><pre><code>event: run.status
+data: {"state":"queued","request_id":"test_…"}
+
+event: skill.loaded
+data: {"version":4,"mode":"draft"}
+
+event: tool.started
+data: {"name":"GREP","summary":"检索 references/policies.md"}
+
+event: reasoning.summary
+data: {"text":"仅输出模型原生提供的摘要；无则跳过此事件"}
+
+event: response.delta
+data: {"text":"根据当前售后政策……"}
+
+event: done
+data: {"status":"completed","trace_id":"…"}</code></pre></div>
+  <p>测试运行使用独立的 test conversation，不污染生产历史；可选择 active 或 draft Skill。测试和生产共用 Agent 工厂与工具实现，只替换输出传输方式，避免“测试一套逻辑、线上另一套逻辑”。</p>
+</section>
+<section class="section wrap" id="data">
+  <span class="section-no">08 / DATA DESIGN</span>
+  <h2>数据模型与文件存储</h2>
+  <div class="table-scroll breakout" tabindex="0" aria-label="核心数据表，可横向滚动">
+    <table>
+      <caption>PostgreSQL 核心表</caption>
+      <thead><tr><th>表</th><th>关键字段</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>merchants</code></td><td>id、account、password_hash、status</td><td>首期一个账号对应一个商户主体，不做成员角色</td></tr>
+        <tr><td><code>invite_codes</code>／<code>purchases</code></td><td>code_hash、max_uses、used_count、expires_at；merchant_id、plan、status</td><td>购买记录与邀请码分离，激活使用数据库事务</td></tr>
+        <tr><td><code>customer_services</code></td><td>merchant_id、name、status、active_skill_version_id、draft_skill_version_id</td><td>所有客服资源都带 merchant_id；active 与 draft 分离</td></tr>
+        <tr><td><code>skill_versions</code></td><td>service_id、version、root_path、readiness_json、manifest_json、published_at</td><td>不可变快照；发布后不再编辑</td></tr>
+        <tr><td><code>uploads</code></td><td>service_id、draft_version_id、original_path、text_path、mime、size、sha256、parse_status</td><td>记录原文件、文本副本和解析状态，支持追溯</td></tr>
+        <tr><td><code>api_keys</code></td><td>service_id、name、prefix、key_hash、revoked_at、last_used_at</td><td>Key 绑定单个客服，完整值只在创建时显示一次</td></tr>
+        <tr><td><code>conversations</code>／<code>messages</code></td><td>service_id、external_id、channel、control_state；role、content_json、run_id</td><td>生产、测试、配置会话隔离；消息追加且可审计</td></tr>
+        <tr><td><code>runs</code></td><td>request_id、conversation_id、state、queue_reason、deadline_at、result_json、trace_id、skill_version_id、model_id、provider_config_version、capabilities_snapshot</td><td>排队、运行、等待、完成与恢复的权威记录；固定当次模型配置以便复现</td></tr>
+        <tr><td><code>handoffs</code></td><td>conversation_id、reason、question、suggested_replies、state、handled_by、resolution</td><td>人工求助与处理结果；关联商户和会话</td></tr>
+        <tr><td><code>admin_users</code></td><td>id、email、password_hash、status、last_login_at</td><td>与商户账号分表；初始账号由迁移任务幂等创建，不开放注册</td></tr>
+        <tr><td><code>llm_providers</code>／<code>llm_models</code></td><td>type、base_url、encrypted_api_key、config_version；provider_id、model_key、capabilities_json、status</td><td>平台级提供商与模型配置；密钥字段仅存密文，模型能力作为运行时校验依据</td></tr>
+        <tr><td><code>model_assignments</code></td><td>scenario、service_id、model_id、priority、status、updated_by</td><td>保存平台场景默认与可选客服覆盖；按确定优先级解析唯一生效配置</td></tr>
+        <tr><td><code>platform_settings</code></td><td>key、value_json、version、updated_by、updated_at</td><td>保存队列、文件与超时等可在线调整参数；基础设施密钥仍由环境变量管理</td></tr>
+        <tr><td><code>admin_audit_logs</code></td><td>admin_id、action、resource_type、resource_id、request_id、before_json、after_json、result、created_at</td><td>记录管理员关键操作；敏感值只保留掩码或变更标记，不记录明文</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h3>文件目录设计</h3>
+  <div class="code-wrap breakout"><div class="code-title">首期本地持久卷布局</div><button class="copy-btn" type="button">复制</button><pre><code>/data/ai-customer-service/
+  merchants/{merchantId}/
+    services/{serviceId}/
+      incoming/                 # 上传接收与校验，校验后移入草稿
+      drafts/{draftVersion}/    # 配置 Agent 唯一可写目录
+      versions/{version}/       # 已发布、不可变，运行时只读
+      quarantine/               # 解析失败或类型异常文件</code></pre></div>
+  <p>数据库只存相对路径与元数据，不存文件 Blob。运行时不接收物理路径，READ 的输入类似 <code>/references/policies.md</code>，由后端映射到 active 版本目录。切换 active 只修改数据库指针，不移动文件。</p>
+  <h3>上下文长度控制</h3>
+  <ul>
+    <li>运行时固定加载 SKILL.md，不一次注入全部 references；通过 GLOB／GREP 找到资料后再 READ 所需片段。</li>
+    <li>大文本按来源与章节拆分，source-index 记录搜索提示；首期不引入向量库。</li>
+    <li>会话历史以数据库为准，按 Token 预算保留最近消息；超长时使用可审计摘要，摘要与原文关联。</li>
+    <li>active 版本号进入提示词与 Langfuse metadata，方便复现“当时用了哪份知识”。</li>
+  </ul>
+</section>
+<section class="section wrap" id="observability">
+  <span class="section-no">09 / OBSERVABILITY DESIGN</span>
+  <h2>Langfuse 追踪设计</h2>
+  <p class="lead">追踪范围自 API 接收请求开始，覆盖排队、模型调用、工具执行、sleep 与人工等待。API 受理时创建根观测与 trace_id，并写入 runs 和队列任务；Worker 通过 OpenTelemetry／W3C Trace Context 继续同一链路，再将 LangChain CallbackHandler 挂接至 Agent 调用。</p>
+  <div class="code-wrap breakout"><div class="code-title">建议 Trace 树</div><button class="copy-btn" type="button">复制</button><pre><code>trace: chat.request
+  attributes: request_id, session_id, merchant_id, service_id
+  │
+  ├─ span: api.authenticate
+  ├─ span: run.queue
+  │    output: queue_reason, queue_position, queue_duration_ms
+  ├─ span: agent.run
+  │    attributes: skill_version, model, environment, channel
+  │    ├─ span: skill.load
+  │    │    output: SKILL.md path, pinned=true, manifest status
+  │    ├─ generation: model.generate
+  │    │    input/output, token usage, latency, provider error
+  │    ├─ span: tool.READ / GLOB / GREP
+  │    │    safe path, matched files, bytes/lines, duration
+  │    ├─ span: response.wait                 # 仅 sleep > 1
+  │    │    output: deadline, interrupted_by_run_id
+  │    └─ span: ask_human                     # 仅人工求助
+  │         output: handoff_id, reason
+  └─ span: response.finalize
+       output: completed / waiting_for_human / superseded / failed</code></pre></div>
+  <p>Langfuse 官方 JS 集成通过 <code>@langfuse/langchain</code> 的 CallbackHandler 捕获 LangChain／LangGraph 的模型、工具与延迟，也可与 <code>@langfuse/tracing</code> 的外层 Observation 组合。<a href="#source-5">[官方资料 5]</a> 因此业务排队 Span 与 Agent 内部调用可以放在同一 Trace 中。</p>
+  <div class="table-scroll breakout" tabindex="0" aria-label="Langfuse 字段约定，可横向滚动">
+    <table>
+      <caption>字段与隐私约定</caption>
+      <thead><tr><th>字段</th><th>取值</th><th>用途</th></tr></thead>
+      <tbody>
+        <tr><td><code>trace_id</code></td><td>每个 request_id 一个稳定 ID</td><td>API、Worker、响应和 Langfuse 互相定位</td></tr>
+        <tr><td><code>session_id</code></td><td><code>serviceId:conversation_id</code></td><td>串联同一会话的多个 Run</td></tr>
+        <tr><td><code>user_id</code></td><td>外部 end_user_id 的不可逆哈希</td><td>分析用户会话，不直接上传原始标识</td></tr>
+        <tr><td><code>metadata</code></td><td>merchant_id、service_id、skill_version、model、provider_config_version、channel、queue_reason</td><td>按租户、版本、模型配置和来源筛选</td></tr>
+        <tr><td><code>tags</code></td><td><code>production</code>／<code>test</code>／<code>configuration</code>、行业、状态</td><td>隔离测试流量，建立质量数据集</td></tr>
+        <tr><td><code>scores</code></td><td>商户解决标记、人工纠正、后续评测结果</td><td>从 Trace 进入质量迭代</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h3>实现要求</h3>
+  <ul>
+    <li>每个 Run 创建独立 CallbackHandler，不能全局复用并依赖 last_trace_id，避免并发串线。</li>
+    <li>所有终态都写 output 与 status；异常同时写 runs.error_code 和 Trace，不只依赖控制台日志。</li>
+    <li>长驻 Node 服务使用批量上报，优雅停机时 flush／shutdown；若未来改为 Serverless，需要等待回调完成。</li>
+    <li>API Key、Cookie、密码、完整文件路径默认脱敏；生产环境可配置不记录完整提示词与文件正文，只记录安全摘要。</li>
+    <li>配置 Agent 也使用同样规范，Trace 名为 <code>configuration.run</code>，并记录新增文件、问题优先级、readiness 与发布版本。</li>
+  </ul>
+</section>
+<section class="section wrap" id="security">
+  <span class="section-no">10 / SECURITY DESIGN</span>
+  <h2>安全与访问控制设计</h2>
+  <div class="grid-2 breakout">
+    <div class="node"><h3>账号与邀请码</h3><p>密码 Argon2id；登录与注册按 IP／账号限流；邀请码只存哈希，核销使用事务与唯一约束；会话 Cookie 设置 HttpOnly、Secure、SameSite。</p></div>
+    <div class="node"><h3>管理员访问</h3><p>管理员与商户使用独立账号体系、会话标识和 <code>requireAdmin</code> 守卫；初始管理员仅在不存在管理员时由部署任务创建。停用商户或客服、重置密码与吊销 Key 均使相关会话或凭据失效，并写入不可由普通管理员修改的审计日志。</p></div>
+    <div class="node"><h3>API Key</h3><p>使用密码学随机值，数据库只存哈希；Key 与 serviceId 强绑定；支持吊销、前缀识别、最后使用时间与每 Key 限流。</p></div>
+    <div class="node"><h3>租户隔离</h3><p>所有查询同时校验 merchant_id；公开 Run 状态接口也要求同一客服 Key；测试、配置和生产会话不能互相访问。</p></div>
+    <div class="node"><h3>文件与路径</h3><p>限制数量、单文件与总大小；扩展名、MIME 与文件签名交叉检查；随机存储名；拒绝路径穿越、Symlink 与执行权限。</p></div>
+    <div class="node"><h3>提示词注入</h3><p>上传资料和客户消息都标记为不可信数据；其中“忽略规则、读取其他目录、输出密钥”等指令不得改变 role、rules 与工具权限。</p></div>
+    <div class="node"><h3>资源保护</h3><p>限制模型轮次、工具次数、文件读取字节、sleep 上限、队列长度和每会话并发；超时后返回可识别错误并保留 Trace。</p></div>
+    <div class="node"><h3>平台模型密钥</h3><p>LLM API Key 使用 AES-256-GCM 加密并绑定随机 IV 与认证标签；主密钥仅由服务端环境注入。配置接口返回掩码，连接测试不回显密钥，日志、审计和 Langfuse 统一脱敏；主密钥轮换通过密钥版本支持。</p></div>
+  </div>
+  <div class="decision warning">
+    <div class="decision-title">运行时修改权限约束</div>
+    <p>运行时客服没有 WRITE／EDIT／Shell，也不能访问配置草稿或商户其他文件。只有配置 Agent 能修改当前草稿，只有服务端发布事务能切换 active 版本。这是避免客户通过聊天污染知识库的关键。</p>
+  </div>
+</section>
+<section class="section wrap" id="deployment">
+  <span class="section-no">11 / DEPLOYMENT DESIGN</span>
+  <h2>Docker Compose 部署设计</h2>
+  <p class="lead">首期采用单机 Docker Compose 统一部署应用、队列、数据库和 Langfuse。开发与测试环境执行一条命令即可完成构建、数据库迁移、Langfuse 初始化和服务启动。</p>
+  <div class="code-wrap breakout"><div class="code-title">启动命令</div><button class="copy-btn" type="button">复制</button><pre><code>docker compose up -d --build
+
+# 应用入口：http://localhost:8080
+# Langfuse：http://localhost:3000
+# 停止：docker compose down
+# 注意：docker compose down -v 会删除数据卷，不作为常规停止命令。</code></pre></div>
+  <p>Compose 使用 <code>.env</code> 管理部署参数与随机密钥，仓库提供 <code>.env.example</code>。开发环境提供仅用于本地的默认值；生产部署必须通过环境变量替换全部密钥，并配置 HTTPS 反向代理。</p>
+  <h3>Compose 服务组成</h3>
+  <div class="table-scroll breakout" tabindex="0" aria-label="Docker Compose 服务清单，可横向滚动">
+    <table>
+      <caption>应用与 Langfuse 统一服务清单</caption>
+      <thead><tr><th>服务</th><th>镜像／构建</th><th>职责与依赖</th></tr></thead>
+      <tbody>
+        <tr><td><code>web</code></td><td>构建 React，使用 Nginx 提供静态文件</td><td>应用入口；将 /api 与 /v1 反向代理到 api，不直接暴露数据库</td></tr>
+        <tr><td><code>api</code></td><td>本地 Dockerfile</td><td>Hono API；依赖 migrate 完成、postgres 和 redis-app 健康</td></tr>
+        <tr><td><code>worker</code></td><td>本地 Dockerfile</td><td>配置与运行时 Agent；挂载 app-storage，访问模型服务和 Langfuse</td></tr>
+        <tr><td><code>migrate</code></td><td>本地 Dockerfile，一次性任务</td><td>执行 Drizzle 迁移和初始管理员创建，成功后 API／Worker 才启动</td></tr>
+        <tr><td><code>postgres</code></td><td>PostgreSQL 固定版本镜像</td><td>创建 app 与 langfuse 两个数据库及独立账号；统一使用 UTC</td></tr>
+        <tr><td><code>redis-app</code></td><td>Redis／Valkey 固定版本镜像</td><td>BullMQ、延时任务和应用缓存，使用独立持久卷</td></tr>
+        <tr><td><code>redis-langfuse</code></td><td>Redis／Valkey 固定版本镜像</td><td>Langfuse 队列与缓存，与应用 Redis 隔离，避免策略互相影响</td></tr>
+        <tr><td><code>clickhouse</code></td><td>ClickHouse 固定版本镜像</td><td>Langfuse Trace、Observation 与 Score 数据，统一使用 UTC</td></tr>
+        <tr><td><code>minio</code></td><td>MinIO 固定版本镜像</td><td>Langfuse 事件、附件与导出对象存储；按需开放媒体上传端口</td></tr>
+        <tr><td><code>langfuse-web</code></td><td>Langfuse Web 固定版本镜像</td><td>Langfuse UI 与 API；连接 PostgreSQL、ClickHouse、Redis 和 MinIO</td></tr>
+        <tr><td><code>langfuse-worker</code></td><td>Langfuse Worker 固定版本镜像</td><td>异步处理 Langfuse 事件；与 Web 使用一致的版本与存储配置</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Langfuse 官方自托管架构包含 Web、Worker、PostgreSQL、ClickHouse、Redis／Valkey 和 S3／Blob 存储。<a href="#source-7">[官方资料 7]</a> 本方案使用 MinIO 提供该对象存储能力。可选的 Langfuse AI Gateway 不纳入首期，因为应用已通过模型工厂和平台级 Provider 配置管理模型调用。</p>
+  <h3>Compose 配置骨架</h3>
+  <div class="code-wrap breakout"><div class="code-title">docker-compose.yml 服务关系示意</div><button class="copy-btn" type="button">复制</button><pre><code>services:
+  web:         { build: ./apps/web, depends_on: [api] }
+  api:         { build: ./apps/api, depends_on: [migrate, postgres, redis-app] }
+  worker:      { build: ./apps/worker, depends_on: [migrate, postgres, redis-app] }
+  migrate:     { build: ./apps/api, depends_on: [postgres] }
+
+  postgres:    { image: postgres:&lt;pinned&gt;, volumes: [postgres-data:/var/lib/postgresql/data] }
+  redis-app:   { image: valkey/valkey:&lt;pinned&gt;, volumes: [redis-app-data:/data] }
+  clickhouse:  { image: clickhouse/clickhouse-server:&lt;pinned&gt;, volumes: [clickhouse-data:/var/lib/clickhouse] }
+  minio:       { image: minio/minio:&lt;pinned&gt;, volumes: [minio-data:/data] }
+  redis-langfuse:
+    image: valkey/valkey:&lt;pinned&gt;
+    volumes: [redis-langfuse-data:/data]
+  langfuse-web:
+    image: langfuse/langfuse:&lt;pinned&gt;
+    depends_on: [postgres, clickhouse, redis-langfuse, minio]
+  langfuse-worker:
+    image: langfuse/langfuse-worker:&lt;pinned&gt;
+    depends_on: [postgres, clickhouse, redis-langfuse, minio]
+
+volumes:
+  app-storage:
+  postgres-data:
+  redis-app-data:
+  redis-langfuse-data:
+  clickhouse-data:
+  minio-data:</code></pre></div>
+  <p class="small">该片段用于表达服务边界，不代替最终 Compose 文件。实际配置需补齐 healthcheck、<code>service_healthy</code>／<code>service_completed_successfully</code> 条件、环境变量、资源限制、日志轮转和网络策略。</p>
+  <h3>初始化与环境变量</h3>
+  <div class="code-wrap breakout"><div class="code-title">.env 关键配置分组</div><button class="copy-btn" type="button">复制</button><pre><code># 应用与初始管理员
+APP_SESSION_SECRET=&lt;random&gt;
+MODEL_CONFIG_ENCRYPTION_KEY=&lt;random-32-byte-key&gt;
+ADMIN_INITIAL_EMAIL=admin@example.com
+ADMIN_INITIAL_PASSWORD=&lt;random&gt;
+
+# 应用数据库、队列与文件
+APP_DATABASE_URL=postgresql://app:&lt;password&gt;@postgres:5432/app
+REDIS_URL=redis://redis-app:6379
+STORAGE_DRIVER=local
+STORAGE_ROOT=/data/ai-customer-service
+
+# API／Worker 使用 Langfuse 内部服务地址
+LANGFUSE_BASE_URL=http://langfuse-web:3000
+LANGFUSE_PUBLIC_KEY=pk-lf-&lt;generated&gt;
+LANGFUSE_SECRET_KEY=sk-lf-&lt;generated&gt;
+
+# Langfuse 首次启动自动创建组织、项目、API Key 与初始用户
+LANGFUSE_INIT_ORG_ID=ai-customer-service
+LANGFUSE_INIT_ORG_NAME=AI Customer Service
+LANGFUSE_INIT_PROJECT_ID=production
+LANGFUSE_INIT_PROJECT_NAME=Production
+LANGFUSE_INIT_PROJECT_PUBLIC_KEY=pk-lf-&lt;same-generated-key&gt;
+LANGFUSE_INIT_PROJECT_SECRET_KEY=sk-lf-&lt;same-generated-key&gt;
+LANGFUSE_INIT_USER_EMAIL=langfuse-admin@example.com
+LANGFUSE_INIT_USER_PASSWORD=&lt;random&gt;</code></pre></div>
+  <p>Langfuse 的 <code>LANGFUSE_INIT_*</code> 变量支持在启动时创建组织、项目、API Key 和初始用户。<a href="#source-8">[官方资料 8]</a> 应用与 Worker 使用同一组项目 Key，因此首次启动后无需手工复制 Langfuse 凭据。</p>
+  <h3>网络、健康检查与持久化</h3>
+  <ul>
+    <li>默认仅向宿主机开放应用 <code>8080</code>、Langfuse <code>3000</code> 和按需使用的 MinIO 媒体端口；PostgreSQL、ClickHouse、Redis 与 Worker 不暴露公网端口。</li>
+    <li>所有有状态服务使用命名卷；<code>app-storage</code> 挂载到 API 与 Worker 的相同路径，保证上传文件与 Skill 版本可访问。</li>
+    <li>Web、API、Worker、PostgreSQL、ClickHouse、Redis、MinIO 和 Langfuse 均配置可自动判定的健康检查；迁移任务失败时 API 与 Worker 不启动。</li>
+    <li>PostgreSQL 与 ClickHouse 使用 UTC；Langfuse Web 的外部回调地址与 MinIO 媒体地址根据部署域名配置。</li>
+    <li>为应用与 Langfuse 容器配置 Docker 日志轮转；Trace 与文件数据增长纳入磁盘容量监控。</li>
+  </ul>
+  <div class="decision">
+    <div class="decision-title">部署适用范围</div>
+    <p>Docker Compose 用于首期单机部署、开发和低规模运行，不提供高可用、自动扩容或完整备份能力。备份至少覆盖 PostgreSQL、ClickHouse、MinIO 与 app-storage；需要高可用时迁移至 Kubernetes 或托管基础设施，应用数据模型与 Agent 接口保持不变。</p>
+  </div>
+</section>
+<section class="section wrap" id="delivery">
+  <span class="section-no">12 / IMPLEMENTATION PLAN</span>
+  <h2>实施阶段与验收标准</h2>
+  <p class="lead">实施初期首先完成技术可行性验证，验证范围为固定 Skill、受限工具、非流式 Run、平台模型工厂与 Langfuse 跨进程链路。验证通过后进入产品功能开发，最后以 Docker Compose 完成统一部署、持久化与恢复验收。</p>
+  <div class="table-scroll breakout" tabindex="0" aria-label="开发阶段，可横向滚动">
+    <table>
+      <caption>建议实施阶段</caption>
+      <thead><tr><th>阶段</th><th>交付内容</th><th>退出条件</th></tr></thead>
+      <tbody>
+        <tr><td><strong>A．技术可行性验证</strong></td><td>Deep Agents JS、固定 Skill、只读文件工具、response 信号、Postgres Checkpointer、Langfuse</td><td>一个示例客服可从 /chat 返回完整 JSON；Langfuse 能看到 queue、model、tool、response</td></tr>
+        <tr><td><strong>B．产品与管理底座</strong></td><td>React 前端、Hono、商户注册登录、邀请码、客服列表与一键创建、API Key、管理员看板、LLM Provider／模型配置与审计</td><td>两个商户资源完全隔离；管理员越权用例被拒绝；重复核销、Key 吊销和模型连接测试通过</td></tr>
+        <tr><td><strong>C．配置闭环</strong></td><td>多文件上传、解析、create-customer-service、草稿写入、readiness、版本发布</td><td>只凭聊天与文件即可从创建走到 ready；索引、来源与未知项正确</td></tr>
+        <tr><td><strong>D．生产聊天</strong></td><td>队列与并发、状态查询、五个运行时工具、sleep、幂等、断线恢复</td><td>queued／running 可区分；等待中补充消息只产生一个有效回复</td></tr>
+        <tr><td><strong>E．测试与人工</strong></td><td>SSE 测试台、事件时间线、人工求助、建议回复、接管与交还</td><td>测试与生产共用 Agent 核心；人工接管期间无 AI 自动回复</td></tr>
+        <tr><td><strong>F．统一部署与加固</strong></td><td>Docker Compose、自动迁移、Langfuse 初始化、健康检查、限流、文件安全、脱敏、备份、恢复、回归评测</td><td>全新环境一条命令启动并通过健康检查；重启后数据保留；安全与异常用例通过，形成首期 Agent 评测集</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h3>验收测试范围</h3>
+  <div class="grid-2 breakout">
+    <div class="node"><h4>配置与发布</h4><ul class="checklist"><li>多文件上传失败不影响已成功文件</li><li>Agent 不问已有答案，重复拒绝不循环追问</li><li>P0 通过后自动 ready，旧版本持续可用</li><li>references 索引存在，事实可追溯到来源</li><li>无 OCR 图片在多模态／非多模态模型下均有明确行为</li></ul></div>
+    <div class="node"><h4>Chat 与并发</h4><ul class="checklist"><li>并发槽满时状态为 queued，模型尚未调用</li><li>队列满返回 429，未创建 Run</li><li>同一 request_id 重试不重复追加消息</li><li>客户端断线后结果可恢复</li><li>新消息取消 sleep，旧定时器不能晚到覆盖</li></ul></div>
+    <div class="node"><h4>运行时安全</h4><ul class="checklist"><li>READ 不能越出 active Skill 根目录</li><li>运行时没有写文件与 Shell 工具</li><li>文件中的恶意指令不能覆盖客服规则</li><li>未知事实不编造，按规则 ask_human</li><li>API Key 不能查询其他客服的 Run</li></ul></div>
+    <div class="node"><h4>测试、人工与观测</h4><ul class="checklist"><li>测试事件按序到达，断线有错误提示</li><li>不输出原始思维链或伪造推理摘要</li><li>选择建议回复后可恢复 AI</li><li>接管后只由人工回复，交还后恢复</li><li>Langfuse 一个 Trace 含排队、工具、等待与终态</li></ul></div>
+    <div class="node"><h4>管理员与模型配置</h4><ul class="checklist"><li>商户会话不能访问任何 /api/admin/* 接口</li><li>停用商户后其会话失效，全部客服拒绝新 Run</li><li>客服停用、恢复、软删除和 Key 吊销均有审计</li><li>LLM Key 不明文出现在接口、日志、审计或 Trace</li><li>场景默认与客服覆盖按优先级解析，Run 固化配置快照</li></ul></div>
+    <div class="node"><h4>Compose 部署与恢复</h4><ul class="checklist"><li>空环境执行 docker compose up -d --build 后全部服务健康</li><li>迁移失败时 API 与 Worker 不启动</li><li>Langfuse 自动创建组织、项目、用户和匹配的 API Key</li><li>普通重启后商户、Skill、消息、文件与 Trace 均保留</li><li>备份样例可恢复到新环境，down -v 不纳入常规停止流程</li></ul></div>
+  </div>
+</section>
+<section class="section wrap" id="discussion">
+  <span class="section-no">13 / DESIGN PARAMETERS</span>
+  <h2>待确认设计参数</h2>
+  <p>下列参数不影响总体架构，但会影响接口约定与验收标准。实施前按默认值设计，评审确认后形成正式技术任务。</p>
+  <div class="discussion-item"><div class="label">D01 · 模型</div><div><h3>模型配置方式</h3><p>默认由管理员在 <code>/admin/llm</code> 统一配置 LLM Provider、模型和场景默认值，商户不填写模型 Key。ModelFactory 支持 OpenAI 兼容、Anthropic、Gemini 等提供商；每个 Run 固化实际模型、Provider 配置版本与能力快照。处理图片前校验多模态能力，不支持时返回不可读状态并引导补充文字。</p></div></div>
+  <div class="discussion-item"><div class="label">D02 · 消息协议</div><div><h3>消息协议语义</h3><p>默认将 /chat 的 messages 定义为本次新增消息，由服务端保存完整历史，以支持 sleep、幂等和人工接管。后续如需兼容 OpenAI Chat Completions，通过独立 Adapter 实现，不在同一接口混用两种语义。</p></div></div>
+  <div class="discussion-item"><div class="label">D03 · 等待上限</div><div><h3>等待时间范围</h3><p>默认 sleep 仅允许 0 或 2–30 秒。网关与调用方总超时至少覆盖正常模型生成时间及 30 秒等待。waiting_input 可被新消息取代；其他 running 状态不中途取消。</p></div></div>
+  <div class="discussion-item"><div class="label">D04 · 可用条件</div><div><h3>最低就绪信息</h3><p>默认要求客服身份与业务对象完整，其余缺失信息采用保守兜底。服务范围未知时仅根据已有资料回答，事实未知时转人工。达到最低条件后状态置为 ready，不以完整 FAQ 作为就绪前提。</p></div></div>
+  <div class="discussion-item"><div class="label">D05 · 版本发布</div><div><h3>Skill 发布策略</h3><p>默认在配置更新通过校验后自动发布，测试台可预览草稿。已发布版本不可变，active 原子切换并支持回滚。若评审要求商户确认，可将发布动作调整为手动操作，目录与版本设计保持不变。</p></div></div>
+  <div class="discussion-item"><div class="label">D06 · 人工通知</div><div><h3>人工求助通知方式</h3><p>默认通过商户后台轮询／SSE 提供求助提醒，支持建议回复与会话接管。邮件、企业微信和 Webhook 通知列入后续扩展范围。</p></div></div>
+</section>
+<section class="section wrap" id="sources">
+  <span class="section-no">14 / REFERENCES</span>
+  <h2>参考资料</h2>
+  <p>以下为技术选型引用的官方资料，访问日期为 2026-11-06。具体 API 与依赖版本在开发锁版阶段复核。</p>
+  <ol>
+    <li id="source-1"><a href="https://docs.langchain.com/oss/javascript/deepagents/overview">Deep Agents JavaScript Overview</a>：Agent 工具、虚拟文件系统、权限、流式事件与执行能力。</li>
+    <li id="source-2"><a href="https://docs.langchain.com/oss/javascript/deepagents/skills">Deep Agents JavaScript Skills</a>：Agent Skills 目录规范、三级渐进披露、固定加载与 Skill 工具。</li>
+    <li id="source-3"><a href="https://docs.langchain.com/oss/javascript/deepagents/going-to-production">Deep Agents：Going to production</a>：持久化执行、人工暂停、生产文件后端与隔离建议。</li>
+    <li id="source-4"><a href="https://docs.langchain.com/oss/javascript/deepagents/backends">Deep Agents：Backends</a>：State／Store／Filesystem 等后端及 Web 服务安全注意事项。</li>
+    <li id="source-5"><a href="https://langfuse.com/integrations/frameworks/langchain">Langfuse：LangChain／LangGraph JS 集成</a>：CallbackHandler、Trace 属性、外层 Observation、刷新与并发注意。</li>
+    <li id="source-6"><a href="https://mastra.ai/docs/observability/tracing/exporters/langfuse">Mastra：Langfuse Exporter</a>：备选 TypeScript Agent 框架的 Langfuse 接入能力。</li>
+    <li id="source-7"><a href="https://langfuse.com/self-hosting/deployment/docker-compose">Langfuse：Docker Compose 自托管部署</a>：Web、Worker、PostgreSQL、ClickHouse、Redis／Valkey 与 S3／Blob 存储组件及部署要求。</li>
+    <li id="source-8"><a href="https://langfuse.com/self-hosting/administration/headless-initialization">Langfuse：Headless Initialization</a>：通过 <code>LANGFUSE_INIT_*</code> 环境变量初始化组织、项目、API Key 与初始用户。</li>
+  </ol>
+  <div class="decision">
+    <div class="decision-title">参数确认顺序</div>
+    <p>优先确认 D01–D04，其内容涉及模型适配、调用方协议与核心状态机；随后确认自动发布策略。其余页面与数据模型可按当前设计拆分实施任务。</p>
+  </div>
+</section>
+</main>
+<footer class="footer">
+  <div class="footer-inner"><span>轻量 AI 客服产品 · 技术设计与实现计划 v0.2</span><a href="#top">回到顶部</a></div>
+</footer>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+(function(){
+  const toast = document.getElementById('toast');
+  let toastTimer;
+  function showToast(message){
+    toast.textContent = message;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 1800);
+  }
+
+  document.getElementById('printButton').addEventListener('click', () => window.print());
+  let printClosedDetails = [];
+  window.addEventListener('beforeprint', () => {
+    printClosedDetails = Array.from(document.querySelectorAll('details.ref:not([open])'));
+    printClosedDetails.forEach(item => { item.open = true; });
+  });
+  window.addEventListener('afterprint', () => {
+    printClosedDetails.forEach(item => { item.open = false; });
+    printClosedDetails = [];
+  });
+
+  const tabs = Array.from(document.querySelectorAll('[data-flow]'));
+  const panels = Array.from(document.querySelectorAll('[data-flow-panel]'));
+  function activateTab(name, focus){
+    tabs.forEach(tab => {
+      const active = tab.dataset.flow === name;
+      tab.setAttribute('aria-selected', String(active));
+      tab.tabIndex = active ? 0 : -1;
+      if(active && focus) tab.focus();
+    });
+    panels.forEach(panel => { panel.hidden = panel.dataset.flowPanel !== name; });
+  }
+  tabs.forEach((tab, index) => {
+    tab.addEventListener('click', () => activateTab(tab.dataset.flow, false));
+    tab.addEventListener('keydown', event => {
+      if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+      event.preventDefault();
+      let next = index;
+      if(event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+      if(event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
+      if(event.key === 'Home') next = 0;
+      if(event.key === 'End') next = tabs.length - 1;
+      activateTab(tabs[next].dataset.flow, true);
+    });
+  });
+  activateTab('onboard', false);
+
+  async function copyText(text){
+    if(navigator.clipboard && window.isSecureContext){
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly','');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    const ok = document.execCommand('copy');
+    area.remove();
+    if(!ok) throw new Error('copy failed');
+  }
+  document.querySelectorAll('.copy-btn').forEach(button => {
+    button.addEventListener('click', async () => {
+      const code = button.parentElement.querySelector('pre code');
+      try{
+        await copyText(code.innerText);
+        showToast('已复制代码示例');
+      }catch(error){
+        showToast('复制失败，请手动选择代码');
+      }
+    });
+  });
+
+  const toc = document.getElementById('toc');
+  toc.querySelectorAll('a').forEach(link => link.addEventListener('click', () => { toc.open = false; }));
+  document.addEventListener('keydown', event => {
+    if(event.key === 'Escape') toc.open = false;
+  });
+  document.addEventListener('click', event => {
+    if(toc.open && !toc.contains(event.target)) toc.open = false;
+  });
+
+  const progressBar = document.getElementById('progressBar');
+  let ticking = false;
+  function updateProgress(){
+    const total = document.documentElement.scrollHeight - window.innerHeight;
+    const ratio = total > 0 ? Math.min(1, Math.max(0, window.scrollY / total)) : 0;
+    progressBar.style.width = (ratio * 100).toFixed(2) + '%';
+    ticking = false;
+  }
+  window.addEventListener('scroll', () => {
+    if(!ticking){ requestAnimationFrame(updateProgress); ticking = true; }
+  }, {passive:true});
+  window.addEventListener('resize', updateProgress);
+  updateProgress();
+})();
+</script>
+</body>
+</html>

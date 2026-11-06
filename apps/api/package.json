@@ -1,0 +1,25 @@
+{
+  "name": "@honmono/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.0",
+    "@honmono/agent": "*",
+    "@honmono/contracts": "*",
+    "@honmono/db": "*",
+    "@honmono/storage": "*",
+    "bullmq": "^5.63.0",
+    "hono": "^4.13.16",
+    "ioredis": "^5.8.0",
+    "zod": "^4.1.13",
+    "@node-rs/argon2": "^2.0.2",
+    "tsx": "^4.20.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22"
+  }
+}
