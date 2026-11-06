@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { api, useAuth } from "../auth";
+import { Logo } from "../components/Logo";
 
 const STATUS_BADGE: Record<string, string> = {
   configuring: "bg-amber-100 text-amber-700",
@@ -22,9 +23,9 @@ export function MerchantLayout({ children, active }: { children: React.ReactNode
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
           <div className="flex items-center gap-6">
-            <Link to="/dashboard" className="font-bold text-slate-800">Honmono AI</Link>
+            <Link to="/dashboard"><Logo size={26} /></Link>
             <nav className="flex items-center gap-1 text-sm">
-              <Link to="/dashboard" className={`rounded-lg px-3 py-1.5 ${active === "dashboard" ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-100"}`}>我的客服</Link>
+              <Link to="/dashboard" className={`rounded-lg px-3 py-1.5 ${active === "dashboard" ? "bg-orange-50 text-[#FF5000]" : "text-slate-600 hover:bg-slate-100"}`}>我的客服</Link>
             </nav>
           </div>
           <div className="flex items-center gap-3 text-sm">

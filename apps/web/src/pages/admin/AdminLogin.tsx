@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, useAuth } from "../../auth";
+import { Logo } from "../../components/Logo";
 
 export function AdminLogin() {
   const [email, setEmail] = useState("");
@@ -29,6 +30,7 @@ export function AdminLogin() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-900 p-6">
       <form onSubmit={submit} className="w-full max-w-sm rounded-xl bg-white p-7 shadow-lg">
+        <div className="mb-4"><Logo size={30} /></div>
         <h1 className="mb-1 text-xl font-bold">管理员登录</h1>
         <p className="mb-6 text-sm text-slate-500">Honmono AI 平台管理后台</p>
         <label className="label">邮箱</label>

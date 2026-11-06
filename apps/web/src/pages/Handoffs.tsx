@@ -28,7 +28,7 @@ export function Handoffs() {
 const STATE_LABEL: Record<string, [string, string]> = {
   pending: ["待处理", "bg-amber-100 text-amber-700"],
   assisted_reply: ["已建议回复", "bg-green-100 text-green-700"],
-  human_controlled: ["人工接管中", "bg-blue-100 text-blue-700"],
+  human_controlled: ["人工接管中", "bg-blue-50 text-sky-600"],
   resolved: ["已结束", "bg-slate-100 text-slate-500"],
 };
 
@@ -165,7 +165,7 @@ function HandoffCard(props: {
                     key={i}
                     onClick={() => onDraft(s)}
                     className={`block w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
-                      draft === s ? "border-blue-400 bg-blue-50 text-blue-800" : "border-slate-200 hover:bg-slate-50"
+                      draft === s ? "border-blue-400 bg-blue-50 text-[#c2410c]" : "border-slate-200 hover:bg-slate-50"
                     }`}
                   >
                     {s}

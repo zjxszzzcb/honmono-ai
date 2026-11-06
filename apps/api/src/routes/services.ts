@@ -204,6 +204,44 @@ async function saveUpload(serviceId: string, merchantId: string, file: File, qua
   return up;
 }
 
+// 草稿工作目录文件树（供前端展示 Skill 生成过程）
+serviceRoutes.get("/:id/files/tree", async (c) => {
+  const service = await requireOwnedService(c.req.param("id"), c.get("merchant")!.sub);
+  if (!service) return c.json({ error: "not_found" }, 404);
+  const draftVersionId = service.draftSkillVersionId;
+  if (!draftVersionId) return c.json({ files: [] });
+  const draft = (await db.select().from(skillVersions).where(eq(skillVersions.id, draftVersionId)).limit(1))[0];
+  if (!draft) return c.json({ files: [] });
+  const entries = await storage.listTree(draft.rootPath);
+  return c.json({
+    root: `drafts/v${draft.version}`,
+    files: entries.map((e) => ({ path: e, dir: e.endsWith("/") })),
+  });
+});
+
+// 草稿文件内容预览（只读；路径强制围栏在草稿目录内）
+serviceRoutes.get("/:id/files/preview", async (c) => {
+  const service = await requireOwnedService(c.req.param("id"), c.get("merchant")!.sub);
+  if (!service) return c.json({ error: "not_found" }, 404);
+  const draftVersionId = service.draftSkillVersionId;
+  if (!draftVersionId) return c.json({ error: "not_found" }, 404);
+  const draft = (await db.select().from(skillVersions).where(eq(skillVersions.id, draftVersionId)).limit(1))[0];
+  if (!draft) return c.json({ error: "not_found" }, 404);
+  const rel = c.req.query("path") ?? "";
+  try {
+    const abs = storage.resolveWithin(`${draft.rootPath}/${rel.replace(/^\/+/, "")}`);
+    // 双保险：解析后必须仍在草稿目录内
+    const draftAbs = storage.resolveWithin(draft.rootPath);
+    if (!abs.startsWith(draftAbs)) return c.json({ error: "forbidden" }, 403);
+    const stat = await (await import("node:fs/promises")).stat(abs);
+    if (stat.size > 512 * 1024) return c.json({ error: "too_large", message: "文件超过 512KB，仅支持预览更小的文本文件" }, 400);
+    const content = await storage.readText(`${draft.rootPath}/${rel.replace(/^\/+/, "")}`);
+    return c.json({ path: rel, content });
+  } catch {
+    return c.json({ error: "not_found", message: "文件不存在或不可读" }, 404);
+  }
+});
+
 serviceRoutes.get("/:id/files", async (c) => {
   const service = await requireOwnedService(c.req.param("id"), c.get("merchant")!.sub);
   if (!service) return c.json({ error: "not_found" }, 404);

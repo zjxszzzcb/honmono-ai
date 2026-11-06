@@ -56,8 +56,8 @@ function KeysInner({ id }: { id: string }) {
       </form>
 
       {created && (
-        <div className="card mb-6 border-blue-200 bg-blue-50 p-5">
-          <h3 className="mb-2 font-semibold text-blue-800">Key 已创建，完整密钥只显示这一次：</h3>
+        <div className="card mb-6 border-orange-200 bg-orange-50 p-5">
+          <h3 className="mb-2 font-semibold text-[#c2410c]">Key 已创建，完整密钥只显示这一次：</h3>
           <div className="flex items-center gap-3">
             <code className="flex-1 break-all rounded-lg bg-white px-3 py-2 font-mono text-sm">{created.secret}</code>
             <button
@@ -70,7 +70,7 @@ function KeysInner({ id }: { id: string }) {
               {copied ? "已复制 ✓" : "复制"}
             </button>
           </div>
-          <p className="mt-2 text-xs text-blue-600">请立即保存到安全位置，刷新后无法再次查看。</p>
+          <p className="mt-2 text-xs text-[#FF5000]">请立即保存到安全位置，刷新后无法再次查看。</p>
         </div>
       )}
 

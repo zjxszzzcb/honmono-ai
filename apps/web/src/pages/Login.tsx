@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, useAuth } from "../auth";
+import { Logo } from "../components/Logo";
 
 export function Login() {
   const [account, setAccount] = useState("");
@@ -29,8 +30,9 @@ export function Login() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
       <form onSubmit={submit} className="card w-full max-w-sm p-7">
+        <div className="mb-4"><Logo size={30} /></div>
         <h1 className="mb-1 text-xl font-bold">登录商户控制台</h1>
-        <p className="mb-6 text-sm text-slate-500">还没有账号？<Link to="/register" className="text-blue-600 hover:underline">注册</Link></p>
+        <p className="mb-6 text-sm text-slate-500">还没有账号？<Link to="/register" className="text-[#FF5000] hover:underline">注册</Link></p>
         <label className="label">账号</label>
         <input className="input mb-4" value={account} onChange={(e) => setAccount(e.target.value)} placeholder="邮箱或用户名" required />
         <label className="label">密码</label>
@@ -70,7 +72,7 @@ export function Register() {
     <div className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
       <form onSubmit={submit} className="card w-full max-w-sm p-7">
         <h1 className="mb-1 text-xl font-bold">注册</h1>
-        <p className="mb-6 text-sm text-slate-500">已有账号？<Link to="/login" className="text-blue-600 hover:underline">登录</Link></p>
+        <p className="mb-6 text-sm text-slate-500">已有账号？<Link to="/login" className="text-[#FF5000] hover:underline">登录</Link></p>
         <label className="label">账号（邮箱）</label>
         <input className="input mb-4" value={account} onChange={(e) => setAccount(e.target.value)} placeholder="you@example.com" required />
         <label className="label">密码（至少 8 位）</label>

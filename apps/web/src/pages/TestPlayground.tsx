@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { api } from "../auth";
 import { MerchantLayout } from "./layout";
+import { Composer } from "../components/Composer";
+import { TypewriterText } from "../components/Typewriter";
 
-type Msg = { id: number; role: string; author_type: string; content: string; created_at: string };
 type TimelineEvent = { kind: string; text: string; at: number };
 
 export function TestPlayground() {
@@ -15,39 +15,32 @@ export function TestPlayground() {
   );
 }
 
+type Bubble = { key: number; role: "user" | "ai" | "system"; content: string };
+
 function TestInner({ id }: { id: string }) {
-  const [messages, setMessages] = useState<Msg[]>([]);
+  const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [events, setEvents] = useState<TimelineEvent[]>([]);
-  const [input, setInput] = useState("");
   const [running, setRunning] = useState(false);
   const [useDraft, setUseDraft] = useState(true);
   const [lastStatus, setLastStatus] = useState<string | null>(null);
+  const [streamTarget, setStreamTarget] = useState<{ key: number; text: string } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-
-  const loadHistory = useCallback(async () => {
-    // 测试会话消息通过 handoffs 页不可见；用公开格式接口拿不到，直接读取 config 无关。
-    // 简化：测试历史从 /api/customer-services/:id/handoffs 无关，这里改用本地展示运行中消息。
-  }, [id]);
-
-  useEffect(() => {
-    loadHistory();
-  }, [loadHistory]);
+  const keyRef = useRef(1);
+  const nextKey = () => keyRef.current++;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, events.length]);
+  }, [bubbles.length, events.length, streamTarget?.text.length]);
 
-  const send = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const content = input.trim();
-    if (!content || running) return;
-    setInput("");
+  const send = async (content: string) => {
+    if (running) return;
     setRunning(true);
     setLastStatus(null);
     setEvents([]);
-    let aiText = "";
-    const localId = Date.now();
-    setMessages((prev) => [...prev, { id: localId, role: "user", author_type: "end_user", content, created_at: new Date().toISOString() }]);
+    const userKey = nextKey();
+    const aiKey = nextKey();
+    setBubbles((prev) => [...prev, { key: userKey, role: "user", content }]);
+    setStreamTarget({ key: aiKey, text: "" });
 
     try {
       const res = await fetch(`/api/customer-services/${id}/test-runs`, {
@@ -63,6 +56,7 @@ function TestInner({ id }: { id: string }) {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let aiText = "";
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -83,24 +77,21 @@ function TestInner({ id }: { id: string }) {
           if (event === "run.status") {
             setEvents((p) => [...p, { kind: "status", text: `运行状态：${data.state}`, at: Date.now() }]);
           } else if (event === "skill.loaded") {
-            setEvents((p) => [...p, { kind: "skill", text: `加载技能 ${data.mode === "draft" ? "草稿" : "v" + data.version}（v${data.version}）`, at: Date.now() }]);
+            setEvents((p) => [
+              ...p,
+              { kind: "skill", text: `加载技能 ${data.mode === "draft" ? "草稿" : `v${data.version}`}（v${data.version}）`, at: Date.now() },
+            ]);
           } else if (event === "tool.started") {
             setEvents((p) => [...p, { kind: "tool", text: `工具 ${data.name}：${data.summary ?? ""}`, at: Date.now() }]);
           } else if (event === "response.delta") {
             aiText += String(data.text ?? "");
-            setMessages((prev) => {
-              const last = prev.at(-1);
-              if (last && last.id === localId + 1) {
-                return [...prev.slice(0, -1), { ...last, content: aiText }];
-              }
-              return [...prev, { id: localId + 1, role: "assistant", author_type: "ai", content: aiText, created_at: new Date().toISOString() }];
-            });
+            setStreamTarget({ key: aiKey, text: aiText });
           } else if (event === "ask_human") {
             setLastStatus("waiting_for_human");
             setEvents((p) => [...p, { kind: "human", text: `转人工：${data.question}`, at: Date.now() }]);
-            setMessages((prev) => [
+            setBubbles((prev) => [
               ...prev,
-              { id: localId + 2, role: "assistant", author_type: "system", content: `⏸ 已创建人工求助（原因：${data.reason}）。可在「人工求助」页处理。`, created_at: new Date().toISOString() },
+              { key: nextKey(), role: "system", content: `⏸ 已创建人工求助（原因：${data.reason}）。可在「人工求助」页处理。` },
             ]);
           } else if (event === "error") {
             setEvents((p) => [...p, { kind: "error", text: String(data.message ?? "错误"), at: Date.now() }]);
@@ -114,59 +105,83 @@ function TestInner({ id }: { id: string }) {
       setEvents((p) => [...p, { kind: "error", text: err instanceof Error ? err.message : String(err), at: Date.now() }]);
     } finally {
       setRunning(false);
+      setStreamTarget((st) => {
+        if (st && st.text) {
+          setBubbles((prev) => [...prev, { key: st.key, role: "ai", content: st.text }]);
+        }
+        return null;
+      });
     }
   };
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-      <div className="card flex h-[calc(100vh-190px)] flex-col">
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
+      <div className="card flex h-[calc(100vh-150px)] flex-col overflow-hidden">
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
           <div>
-            <h2 className="font-semibold">测试台</h2>
+            <h2 className="text-[17px] font-semibold text-slate-900">测试台</h2>
             <p className="mt-0.5 text-xs text-slate-400">与生产 /chat 完全独立的测试会话</p>
           </div>
-          <label className="flex items-center gap-2 text-sm text-slate-600">
-            <input type="checkbox" checked={useDraft} onChange={(e) => setUseDraft(e.target.checked)} />
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+            <input type="checkbox" checked={useDraft} onChange={(e) => setUseDraft(e.target.checked)} className="accent-[#FF5000]" />
             使用草稿版本
           </label>
         </div>
-        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
-          {messages.length === 0 && <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">以玩家身份发送消息试试，右侧会显示执行事件时间线。</div>}
-          {messages.map((m) => (
-            <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div
-                className={`max-w-[80%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-                  m.role === "user"
-                    ? "rounded-br-md bg-blue-600 text-white"
-                    : m.author_type === "system"
-                      ? "rounded-bl-md border border-amber-200 bg-amber-50 text-amber-800"
-                      : "rounded-bl-md bg-slate-100 text-slate-800"
-                }`}
-              >
-                {m.content}
+
+        <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
+          {bubbles.length === 0 && !streamTarget && (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3 text-sm text-slate-500">
+              以玩家身份发送消息试试，右侧会显示执行事件时间线。
+            </div>
+          )}
+          {bubbles.map((b) => (
+            <div key={b.key} className={`msg-enter flex ${b.role === "user" ? "justify-end" : "justify-start"}`}>
+              <div className={b.role === "user" ? "bubble-user" : b.role === "system" ? "bubble-system" : "bubble-ai"}>
+                {b.content}
               </div>
             </div>
           ))}
-          {running && (
+          {streamTarget && (
+            <div className="msg-enter flex justify-start">
+              <div className="bubble-ai">
+                {streamTarget.text.length > 0 ? (
+                  <TypewriterText text={streamTarget.text} enabled={true} />
+                ) : (
+                  <span className="flex items-center gap-1.5 text-slate-400">
+                    AI 正在处理
+                    <span className="thinking-dot" />
+                    <span className="thinking-dot" />
+                    <span className="thinking-dot" />
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+          {running && !streamTarget && (
             <div className="flex justify-start">
-              <div className="rounded-2xl rounded-bl-md bg-slate-100 px-4 py-2.5 text-sm text-slate-400"><span className="animate-pulse">AI 正在处理…</span></div>
+              <div className="bubble-ai flex items-center gap-1.5 !text-slate-400">
+                AI 正在处理
+                <span className="thinking-dot" />
+                <span className="thinking-dot" />
+                <span className="thinking-dot" />
+              </div>
             </div>
           )}
           <div ref={bottomRef} />
         </div>
+
         {lastStatus === "waiting_for_human" && (
-          <div className="border-t border-amber-100 bg-amber-50 px-5 py-2 text-xs text-amber-700">
+          <div className="border-t border-amber-100 bg-amber-50/80 px-6 py-2.5 text-xs text-amber-700">
             本会话已转人工：可在「人工求助」页选择建议回复或接管；处理后 AI 恢复自动应答。
           </div>
         )}
-        <form onSubmit={send} className="flex gap-2 border-t border-slate-100 px-5 py-3.5">
-          <input className="input flex-1" value={input} onChange={(e) => setInput(e.target.value)} placeholder="以玩家身份输入消息" disabled={running} />
-          <button className="btn-primary" disabled={running || !input.trim()}>发送</button>
-        </form>
+        <div className="border-t border-slate-100 px-4 pb-4 pt-3">
+          <Composer placeholder="以玩家身份输入消息…" disabled={running} onSend={send} sendLabel="Enter 发送" />
+        </div>
       </div>
 
-      <div className="card h-[calc(100vh-190px)] overflow-y-auto p-5">
-        <h3 className="mb-3 font-semibold">执行事件时间线</h3>
+      <div className="card h-[calc(100vh-150px)] overflow-y-auto p-5">
+        <h3 className="mb-3 font-semibold text-slate-900">执行事件时间线</h3>
         {events.length === 0 && <p className="text-xs text-slate-400">尚无事件</p>}
         <ol className="space-y-2.5">
           {events.map((e, i) => (
@@ -183,7 +198,7 @@ function TestInner({ id }: { id: string }) {
 }
 
 const EVENT_COLOR: Record<string, string> = {
-  status: "bg-blue-400",
+  status: "bg-orange-400",
   skill: "bg-violet-400",
   tool: "bg-cyan-400",
   human: "bg-amber-400",

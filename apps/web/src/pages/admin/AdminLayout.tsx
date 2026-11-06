@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { api, useAuth } from "../../auth";
+import { Logo } from "../../components/Logo";
 
 const LINKS = [
   { to: "/admin", label: "概览", end: true },
@@ -26,7 +27,7 @@ export function AdminLayout() {
       <header className="bg-slate-900 text-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
           <div className="flex items-center gap-6">
-            <span className="font-bold">Honmono AI · 管理后台</span>
+            <span className="flex items-center gap-2.5"><Logo size={24} light /><span className="text-sm text-slate-300">管理后台</span></span>
             <nav className="flex gap-1 text-sm">
               {LINKS.map((l) => (
                 <NavLink

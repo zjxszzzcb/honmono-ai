@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, useAuth } from "../auth";
 import { MerchantLayout, STATUS_BADGE } from "./layout";
 
-type Svc = { id: string; name: string; status: string; created_at: string };
+type Svc = { id: string; name: string; status: string; created_at?: string; createdAt?: string };
 
 export function Dashboard() {
   return (
@@ -61,7 +61,7 @@ function DashboardInner() {
               <h3 className="font-semibold text-slate-800">{s.name}</h3>
               <span className={`badge ${STATUS_BADGE[s.status] ?? "bg-slate-100"}`}>{STATUS_LABEL[s.status] ?? s.status}</span>
             </div>
-            <p className="mb-4 text-xs text-slate-400">创建于 {new Date(s.created_at).toLocaleString()}</p>
+            <p className="mb-4 text-xs text-slate-400">创建于 {new Date(s.created_at ?? s.createdAt ?? "").toLocaleString()}</p>
             <div className="flex flex-wrap gap-2 text-sm">
               <Link className="btn-ghost" to={`/services/${s.id}/configure`}>配置</Link>
               <Link className="btn-ghost" to={`/services/${s.id}/test`}>测试</Link>
