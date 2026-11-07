@@ -81,7 +81,7 @@ export function Explorer({
         // 默认所有目录折叠，只露出根文件（SKILL.md 等）
         setCollapsed((prev) => {
           if (prev.size > 0) return prev;
-          const dirs = t.files.filter((f) => f.dir).map((f) => f.path);
+          const dirs = t.files.filter((f) => f.dir).map((f) => f.path.replace(/\/$/, ""));
           return new Set(dirs);
         });
       })

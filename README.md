@@ -98,7 +98,7 @@ e2e-package     王者荣耀示例                    资料包 zip + 测试用�
 
 **4. 草稿实时可查可改** —— 三栏等高：左聊天、中文件树（含 `assets/raw/` 上传原件）、右编辑器直接修改 SKILL.md（⌘S 保存）：
 
-![编辑器打开 Agent 生成的 SKILL.md](docs/screenshots/05-workbench-editor-skillmd.png)
+![编辑器打开 Agent 生成的 SKILL.md（CloudPilot 示例）](docs/screenshots/05-workbench-editor-skillmd.png)
 
 **5. 联网研究笔记** —— 自主检索的赛程/热线信息逐条带来源 URL 与置信度，"未采信的第三方信息"单独归档：
 

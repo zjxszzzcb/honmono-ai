@@ -380,12 +380,14 @@ function Workbench({ id }: { id: string }) {
     </div>
   );
 
+  const editorOpen = Boolean(activeTab);
+
   if (!showFiles) {
     return <div className="flex h-[calc(100vh-150px)]">{chatPanel}</div>;
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[1fr_240px_1fr]">
+    <div className={`grid gap-4 ${editorOpen ? "xl:grid-cols-[1fr_240px_1fr]" : "xl:grid-cols-[1fr_420px]"}`}>
       {chatPanel}
 
       {/* ===== 资源管理器 ===== */}
@@ -393,69 +395,62 @@ function Workbench({ id }: { id: string }) {
         <Explorer serviceId={id} refreshKey={treeKey} activePath={activePath} onOpen={openFile} onUpload={upload} uploading={uploading} />
       </div>
 
-      {/* ===== 编辑器 ===== */}
-      <div className="card flex h-[calc(100vh-150px)] min-w-0 flex-col overflow-hidden">
-        <div className="flex items-center gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50 px-2 pt-1.5">
-          {tabs.length === 0 && <span className="px-3 py-2 text-xs text-slate-400">未打开文件</span>}
-          {tabs.map((t) => {
-            const isDirty = t.content !== t.saved;
-            const active = t.path === activePath;
-            return (
-              <div
-                key={t.path}
-                className={`flex shrink-0 items-center gap-1.5 rounded-t-lg border border-b-0 px-3 py-1.5 text-xs ${
-                  active ? "border-slate-200 bg-white text-slate-800" : "border-transparent text-slate-500 hover:bg-slate-100"
-                }`}
-              >
-                <button className="max-w-[200px] truncate font-mono" onClick={() => setActivePath(t.path)} title={t.path}>
-                  {t.path.split("/").pop()}
-                  {isDirty ? " ●" : ""}
-                </button>
-                <button className="text-slate-300 hover:text-slate-600" onClick={() => closeTab(t.path)}>
-                  ✕
-                </button>
-              </div>
-            );
-          })}
-        </div>
-
-        {activeTab ? (
-          <>
-            <div className="flex items-center justify-between border-b border-slate-100 bg-white px-4 py-2">
-              <span className="truncate font-mono text-xs text-slate-500">{activeTab.path}</span>
-              <div className="flex items-center gap-2">
-                {savedFlash && <span className="text-xs text-green-600">{savedFlash}</span>}
-                {dirty && <span className="text-xs text-amber-600">未保存</span>}
-                <button className="btn-primary !px-3 !py-1 text-xs" onClick={saveFile} disabled={!dirty || saving || activeTab.loading}>
-                  {saving ? "保存中…" : "保存 ⌘S"}
-                </button>
-              </div>
-            </div>
-            {activeTab.loading ? (
-              <div className="flex flex-1 items-center justify-center text-sm text-slate-400">加载中…</div>
-            ) : (
-              <textarea
-                className="min-h-0 flex-1 resize-none bg-[#fbfbfc] p-4 font-mono text-[12.5px] leading-relaxed text-slate-700 outline-none"
-                value={activeTab.content}
-                onChange={(e) => updateContent(e.target.value)}
-                spellCheck={false}
-              />
-            )}
-            <div className="flex items-center justify-between border-t border-slate-100 bg-white px-4 py-1.5 text-[11px] text-slate-400">
-              <span>Markdown · UTF-8</span>
-              <span>{dirty ? "有未保存修改" : "已同步"}</span>
-            </div>
-          </>
-        ) : (
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 text-slate-300">
-            <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-              <path d="M14 2v6h6M9 13h6M9 17h6" />
-            </svg>
-            <p className="text-sm">点击中间文件列表开始编辑</p>
+      {/* ===== 编辑器（仅在打开文件时渲染，无空白占位）===== */}
+      {editorOpen && (
+        <div className="card flex h-[calc(100vh-150px)] min-w-0 flex-col overflow-hidden">
+          <div className="flex items-center gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50 px-2 pt-1.5">
+            {tabs.map((t) => {
+              const isDirty = t.content !== t.saved;
+              const active = t.path === activePath;
+              return (
+                <div
+                  key={t.path}
+                  className={`flex shrink-0 items-center gap-1.5 rounded-t-lg border border-b-0 px-3 py-1.5 text-xs ${
+                    active ? "border-slate-200 bg-white text-slate-800" : "border-transparent text-slate-500 hover:bg-slate-100"
+                  }`}
+                >
+                  <button className="max-w-[200px] truncate font-mono" onClick={() => setActivePath(t.path)} title={t.path}>
+                    {t.path.split("/").pop()}
+                    {isDirty ? " ●" : ""}
+                  </button>
+                  <button className="text-slate-300 hover:text-slate-600" onClick={() => closeTab(t.path)}>
+                    ✕
+                  </button>
+                </div>
+              );
+            })}
           </div>
-        )}
-      </div>
+
+          {activeTab ? (
+            <>
+              <div className="flex items-center justify-between border-b border-slate-100 bg-white px-4 py-2">
+                <span className="truncate font-mono text-xs text-slate-500">{activeTab.path}</span>
+                <div className="flex items-center gap-2">
+                  {savedFlash && <span className="text-xs text-green-600">{savedFlash}</span>}
+                  {dirty && <span className="text-xs text-amber-600">未保存</span>}
+                  <button className="btn-primary !px-3 !py-1 text-xs" onClick={saveFile} disabled={!dirty || saving || activeTab.loading}>
+                    {saving ? "保存中…" : "保存 ⌘S"}
+                  </button>
+                </div>
+              </div>
+              {activeTab.loading ? (
+                <div className="flex flex-1 items-center justify-center text-sm text-slate-400">加载中…</div>
+              ) : (
+                <textarea
+                  className="min-h-0 flex-1 resize-none bg-[#fbfbfc] p-4 font-mono text-[12.5px] leading-relaxed text-slate-700 outline-none"
+                  value={activeTab.content}
+                  onChange={(e) => updateContent(e.target.value)}
+                  spellCheck={false}
+                />
+              )}
+              <div className="flex items-center justify-between border-t border-slate-100 bg-white px-4 py-1.5 text-[11px] text-slate-400">
+                <span>Markdown · UTF-8</span>
+                <span>{dirty ? "有未保存修改" : "已同步"}</span>
+              </div>
+            </>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }
