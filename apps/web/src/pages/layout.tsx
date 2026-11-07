@@ -40,14 +40,14 @@ export function MerchantLayout({ children, active, wide }: { children: React.Rea
           <div className="flex items-center gap-6">
             <Link to="/dashboard"><Logo size={26} /></Link>
             <nav className="flex items-center gap-1 text-sm">
-              <NavLink label="我的客服" to="/dashboard" current={location.pathname} />
+              <NavLink label="AI 客服" to="/dashboard" current={location.pathname} />
               <NavLink
                 label="人工接管"
                 to="/handoffs"
                 current={location.pathname}
                 badge={pendingHandoffs}
               />
-              <NavLink label="API Keys" to="/api-keys" current={location.pathname} />
+              <NavLink label="API" to="/api-keys" current={location.pathname} />
             </nav>
           </div>
           <div className="flex items-center gap-3 text-sm">

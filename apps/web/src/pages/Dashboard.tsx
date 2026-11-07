@@ -88,24 +88,8 @@ function DashboardInner() {
 }
 
 function ServiceCard({ svc, onEdit, onChanged }: { svc: Svc; onEdit: () => void; onChanged: () => void }) {
-  const [busy, setBusy] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const nav = useNavigate();
-
-  const toggleDisable = async () => {
-    if (svc.status === "disabled") {
-      // 商户端恢复：恢复为 ready 或 configuring 由后端 enable 决定（仅管理员有 enable；商户侧恢复=重新启用）
-      return;
-    }
-    if (!confirm(`停用「${svc.name}」后所有接入将立即失败，确定？`)) return;
-    setBusy(true);
-    try {
-      // 商户停用自己的客服：走管理员接口不合适，这里仅提供前端入口提示（MVP：商户侧暂不支持自行停用）
-      alert("如需停用客服，请联系平台管理员处理。");
-    } finally {
-      setBusy(false);
-      onChanged();
-    }
-  };
 
   const STATUS: Record<string, [string, string]> = {
     configuring: ["配置中", "bg-amber-50 text-amber-600 border border-amber-200/70"],
@@ -151,8 +135,6 @@ function ServiceCard({ svc, onEdit, onChanged }: { svc: Svc; onEdit: () => void;
           )}
         </span>
         <span className="text-slate-200">|</span>
-        <span>{svc.activeKeys} 个有效 Key</span>
-        <span className="text-slate-200">|</span>
         <span>创建于 {new Date(svc.createdAt).toLocaleDateString()}</span>
         {svc.pendingHandoffs > 0 && (
           <>
@@ -176,21 +158,14 @@ function ServiceCard({ svc, onEdit, onChanged }: { svc: Svc; onEdit: () => void;
         >
           测试
         </button>
-        <button className="btn-ghost !px-3 !py-1.5 text-[13px]" onClick={() => nav(`/services/${svc.id}/keys`)}>
-          API Key
-        </button>
-        <Link className="btn-ghost relative !px-3 !py-1.5 text-[13px]" to={`/services/${svc.id}/handoffs`}>
-          转人工
-          {svc.pendingHandoffs > 0 && (
-            <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#FF5000] px-1 text-[10px] font-bold text-white">
-              {svc.pendingHandoffs}
-            </span>
-          )}
-        </Link>
-        <button className="btn-ghost !px-3 !py-1.5 text-[13px] text-slate-400" onClick={toggleDisable} disabled={busy}>
-          停用
+        <button
+          className="btn-ghost ml-auto !px-3 !py-1.5 text-[13px] text-red-500 hover:border-red-200 hover:bg-red-50"
+          onClick={() => setDeleting(true)}
+        >
+          删除
         </button>
       </div>
+      {deleting && <DeleteModal svc={svc} onClose={() => setDeleting(false)} onDeleted={onChanged} />}
     </div>
   );
 }
@@ -237,6 +212,48 @@ function EditModal({ svc, onClose, onSaved }: { svc: Svc; onClose: () => void; o
           </button>
           <button className="btn-primary" onClick={save} disabled={busy || !name.trim()}>
             {busy ? "保存中…" : "保存"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DeleteModal({ svc, onClose, onDeleted }: { svc: Svc; onClose: () => void; onDeleted: () => void }) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const matched = text.trim() === svc.name;
+
+  const doDelete = async () => {
+    setBusy(true);
+    try {
+      await api(`/api/customer-services/${svc.id}`, { method: "DELETE", body: JSON.stringify({ confirm_name: text.trim() }) });
+      onDeleted();
+      onClose();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "删除失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-bold text-red-600">删除客服「{svc.name}」</h3>
+        <p className="mt-2 text-sm leading-relaxed text-slate-600">
+          此操作不可恢复：客服将立即下线，所有 API Key 一并失效，配置与对话数据将被归档。
+        </p>
+        <p className="mt-3 text-sm text-slate-600">
+          请输入客服名称 <span className="font-semibold text-slate-900">{svc.name}</span> 确认：
+        </p>
+        <input className="input mt-1.5" value={text} onChange={(e) => setText(e.target.value)} placeholder={svc.name} />
+        <div className="mt-4 flex justify-end gap-2">
+          <button className="btn-ghost" onClick={onClose}>
+            取消
+          </button>
+          <button className="btn-primary !bg-[#e5484d] !shadow-none" onClick={doDelete} disabled={!matched || busy}>
+            {busy ? "删除中…" : "确认删除"}
           </button>
         </div>
       </div>

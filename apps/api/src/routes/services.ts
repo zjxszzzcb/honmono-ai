@@ -350,7 +350,11 @@ serviceRoutes.post("/:id/api-keys", async (c) => {
   const service = await requireOwnedService(c.req.param("id"), c.get("merchant")!.sub);
   if (!service) return c.json({ error: "not_found" }, 404);
   const body = ApiKeyCreateInput.parse(await c.req.json());
-  const secret = `cs_live_${crypto.randomUUID().replaceAll("-", "")}${crypto.randomUUID().replaceAll("-", "")}`;
+  // sk + 16 位随机字符（大小写字母数字）
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let rand = "";
+  for (let i = 0; i < 16; i++) rand += alphabet[crypto.getRandomValues(new Uint8Array(1))[0] % alphabet.length];
+  const secret = `sk${rand}`;
   const [key] = await db
     .insert(apiKeys)
     .values({
@@ -362,6 +366,25 @@ serviceRoutes.post("/:id/api-keys", async (c) => {
     .returning();
   // 完整值只在创建时返回一次
   return c.json({ id: key.id, name: key.name, prefix: key.prefix, secret, created_at: key.createdAt });
+});
+
+// 商户删除自己的客服（软删除；名称二次确认；Key 全部吊销）
+serviceRoutes.delete("/:id", async (c) => {
+  const service = await requireOwnedService(c.req.param("id"), c.get("merchant")!.sub);
+  if (!service) return c.json({ error: "not_found" }, 404);
+  const body = z.object({ confirm_name: z.string().min(1) }).parse(await c.req.json().catch(() => ({})));
+  if (body.confirm_name.trim() !== service.name) {
+    return c.json({ error: "confirm_mismatch", message: `确认名称不匹配，请输入「${service.name}」` }, 400);
+  }
+  await db
+    .update(apiKeys)
+    .set({ revokedAt: new Date() })
+    .where(and(eq(apiKeys.serviceId, service.id), isNull(apiKeys.revokedAt)));
+  await db
+    .update(customerServices)
+    .set({ status: "deleted", updatedAt: new Date() })
+    .where(eq(customerServices.id, service.id));
+  return c.json({ ok: true });
 });
 
 serviceRoutes.delete("/:id/api-keys/:keyId", async (c) => {
