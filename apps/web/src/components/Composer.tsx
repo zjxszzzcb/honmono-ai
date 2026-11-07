@@ -98,7 +98,6 @@ export function Composer({
                   e.target.value = "";
                 }}
               />
-              <span className="text-xs text-slate-400 hidden sm:inline">{attachLabel}</span>
             </>
           )}
         </div>

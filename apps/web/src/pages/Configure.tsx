@@ -282,7 +282,7 @@ function Workbench({ id }: { id: string }) {
           disabled={busyRun}
           onSend={send}
           attach={{ onFiles: upload, accept: ".md,.txt,.csv,.json,.pdf,.docx,.xlsx,.xls,.png,.jpg,.jpeg,.webp" }}
-          attachLabel="上传资料（存入 assets/raw）"
+          attachLabel="上传资料"
         />
       </div>
     </div>

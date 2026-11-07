@@ -192,7 +192,7 @@ function TestInner({ id }: { id: string }) {
             onSend={send}
             sendLabel="Enter 发送"
             attach={{ onFiles: upload }}
-            attachLabel="上传到草稿"
+            attachLabel="上传资料"
           />
         </div>
       </div>
