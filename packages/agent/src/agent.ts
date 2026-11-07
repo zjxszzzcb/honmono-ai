@@ -145,13 +145,13 @@ export async function runRuntimeAgent(deps: RuntimeAgentDeps): Promise<ResponseO
     const trace = messages
       .slice(-8)
       .map((m) => {
-        const mm = m as { constructor: { name: string }; tool_calls?: { name: string }[]; content?: unknown; tool_call_id?: string };
+        const mm = m as { constructor: { name: string }; tool_calls?: { name: string }[]; tool_call_id?: string };
         const tc = mm.tool_calls?.map((t) => t.name).join(",") ?? "";
-        const c = typeof mm.content === "string" ? mm.content.slice(0, 80) : JSON.stringify(mm.content)?.slice(0, 80);
-        return `${mm.constructor.name}${tc ? "(" + tc + ")" : ""}${mm.tool_call_id ? "[toolres]" : ""}: ${c}`;
+        // 只记角色与工具名，不携带消息正文（内部提示词不得外泄到错误信息）
+        return `${mm.constructor.name}${tc ? "(" + tc + ")" : ""}${mm.tool_call_id ? "[toolres]" : ""}`;
       })
       .join(" | ");
-    throw new ResponseContractError(`模型多次未通过 response 工具输出回复；轨迹: ${trace}`);
+    throw new ResponseContractError(`模型多次未通过 response 工具输出回复（${trace}）`);
   }
   throw new ResponseContractError("模型多次未通过 response 工具输出回复");
 }

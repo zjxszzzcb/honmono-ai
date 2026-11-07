@@ -117,7 +117,11 @@ function TestInner({ id }: { id: string }) {
       setRunning(false);
       setStreamTarget((st) => {
         if (st && st.text) {
-          setBubbles((prev) => [...prev, { key: st.key, role: "ai", content: st.text }]);
+          setBubbles((prev) =>
+            prev.some((b) => b.key === st.key)
+              ? prev.map((b) => (b.key === st.key ? { ...b, content: st.text } : b))
+              : [...prev, { key: st.key, role: "ai", content: st.text }],
+          );
         }
         return null;
       });

@@ -275,7 +275,7 @@ function Workbench({ id }: { id: string }) {
   const showFiles = panelOpen ?? hasAgentActivity;
 
   const chatPanel = (
-    <div className={`card flex min-h-0 flex-col overflow-hidden ${showFiles ? "min-w-[420px]" : "mx-auto h-full w-full max-w-3xl"}`}>
+    <div className={`card flex min-h-0 flex-col overflow-hidden ${showFiles ? "min-w-[420px] h-[calc(100vh-150px)]" : "mx-auto h-full w-full max-w-3xl"}`}>
       <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
         <div className="flex items-center gap-2.5">
           {!showFiles && <LogoMark size={30} />}
