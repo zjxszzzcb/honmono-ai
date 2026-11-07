@@ -78,6 +78,24 @@ export async function parseUpload(uploadId: string): Promise<void> {
     report = { reason: err instanceof Error ? err.message : String(err) };
   }
 
+  // 原件进草稿 assets/raw/（工作台文件树可见；与 DB uploads 记录一一对应）
+  try {
+    const rawDir = `${draft.rootPath}/assets/raw`;
+    const safeRawName = up.originalName.replace(/[\\/:*?"<>|]/g, "_");
+    let rawRel = `${rawDir}/${safeRawName}`;
+    let seq = 1;
+    while (await storage.exists(rawRel)) {
+      const dot = safeRawName.lastIndexOf(".");
+      const stem = dot > 0 ? safeRawName.slice(0, dot) : safeRawName;
+      const ext = dot > 0 ? safeRawName.slice(dot) : "";
+      rawRel = `${rawDir}/${stem}-${seq}${ext}`;
+      seq += 1;
+    }
+    await storage.copyFile(up.storedPath, rawRel);
+  } catch {
+    // 复制失败不影响解析结果
+  }
+
   let textPath: string | null = null;
   if (textContent && textContent.trim()) {
     textPath = `${draft.rootPath}/references/source-${up.id}.md`;

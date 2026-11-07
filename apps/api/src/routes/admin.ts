@@ -1,7 +1,9 @@
 import { and, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
 import { Hono } from "hono";
+import { z } from "zod";
 import { hash } from "@node-rs/argon2";
 import {
+  searchProviders,
   adminAuditLogs,
   adminUsers,
   apiKeys,
@@ -25,7 +27,7 @@ import {
   conversations,
   decryptSecret,
 } from "@honmono/db";
-import { createChatModel } from "@honmono/agent";
+import { createChatModel, SearchRouter, webFetch, type SearchProviderInfo } from "@honmono/agent";
 import {
   AdminPasswordResetInput,
   AssignmentUpsertInput,
@@ -436,6 +438,119 @@ adminRoutes.put("/llm/defaults/:scenario", async (c) => {
     after: { scenario, model_id: body.model_id },
   });
   return c.json({ ok: true });
+});
+
+// ---------- 搜索服务（WebSearch / WebFetch 供应商）----------
+adminRoutes.get("/search/providers", async (c) => {
+  const rows = await db.select().from(searchProviders).orderBy(desc(searchProviders.createdAt));
+  return c.json(
+    rows.map((p) => ({
+      id: p.id,
+      name: p.name,
+      type: p.type,
+      api_key_mask: p.apiKeyMask,
+      status: p.status,
+      quota_remaining: p.quotaRemaining,
+      last_status: p.lastStatus,
+      last_error: p.lastError,
+      last_used_at: p.lastUsedAt,
+      last_checked_at: p.lastCheckedAt,
+      created_at: p.createdAt,
+    })),
+  );
+});
+
+adminRoutes.post("/search/providers", async (c) => {
+  const admin = c.get("admin")!;
+  const body = z
+    .object({
+      name: z.string().min(1).max(64),
+      type: z.enum(["brave", "exa"]),
+      api_key: z.string().min(1).max(300),
+    })
+    .parse(await c.req.json());
+  const [p] = await db
+    .insert(searchProviders)
+    .values({
+      name: body.name,
+      type: body.type,
+      apiKeyEncrypted: encryptSecret(body.api_key),
+      apiKeyMask: maskSecret(body.api_key),
+    })
+    .returning();
+  await audit({ adminId: admin.sub, adminEmail: admin.email, action: "search.provider.create", resourceType: "search_provider", resourceId: p.id, after: { name: p.name, type: p.type, key_mask: p.apiKeyMask } });
+  return c.json({ id: p.id });
+});
+
+adminRoutes.patch("/search/providers/:id", async (c) => {
+  const admin = c.get("admin")!;
+  const body = z
+    .object({
+      name: z.string().min(1).max(64).optional(),
+      status: z.enum(["active", "disabled"]).optional(),
+      api_key: z.string().min(1).max(300).optional(),
+    })
+    .parse(await c.req.json());
+  const [before] = await db.select().from(searchProviders).where(eq(searchProviders.id, c.req.param("id"))).limit(1);
+  if (!before) return c.json({ error: "not_found" }, 404);
+  const patch: Record<string, unknown> = { updatedAt: new Date() };
+  if (body.name) patch.name = body.name;
+  if (body.status) patch.status = body.status;
+  if (body.api_key) {
+    patch.apiKeyEncrypted = encryptSecret(body.api_key);
+    patch.apiKeyMask = maskSecret(body.api_key);
+    patch.status = "active";
+    patch.lastError = null;
+  }
+  await db.update(searchProviders).set(patch).where(eq(searchProviders.id, before.id));
+  await audit({ adminId: admin.sub, adminEmail: admin.email, action: "search.provider.update", resourceType: "search_provider", resourceId: before.id, before: { name: before.name, status: before.status }, after: { name: patch.name ?? before.name, status: patch.status ?? before.status } });
+  return c.json({ ok: true });
+});
+
+adminRoutes.delete("/search/providers/:id", async (c) => {
+  const admin = c.get("admin")!;
+  await db.update(searchProviders).set({ status: "disabled", updatedAt: new Date() }).where(eq(searchProviders.id, c.req.param("id")));
+  await audit({ adminId: admin.sub, adminEmail: admin.email, action: "search.provider.disable", resourceType: "search_provider", resourceId: c.req.param("id") });
+  return c.json({ ok: true });
+});
+
+// 实测：跑一次真实搜索（同时刷新额度状态），并用 webFetch 验证网页读取
+adminRoutes.post("/search/providers/:id/test", async (c) => {
+  const admin = c.get("admin")!;
+  const [p] = await db.select().from(searchProviders).where(eq(searchProviders.id, c.req.param("id"))).limit(1);
+  if (!p) return c.json({ error: "not_found" }, 404);
+  if (p.status !== "active") return c.json({ ok: false, error: "供应商已停用" }, 200);
+  const info: SearchProviderInfo = { id: p.id, name: p.name, type: p.type as "brave" | "exa", apiKey: decryptSecret(p.apiKeyEncrypted) };
+  const router = new SearchRouter([info], {
+    persist: (pid, patch) => {
+      const { lastUsedAt, ...rest } = patch;
+      db.update(searchProviders).set({ ...rest, ...(lastUsedAt ? { lastUsedAt } : {}), lastCheckedAt: new Date(), updatedAt: new Date() }).where(eq(searchProviders.id, pid)).catch(() => {});
+    },
+  });
+  const t0 = Date.now();
+  const r = await router.search("王者荣耀 官网", 3);
+  const latency = Date.now() - t0;
+  const [after] = await db.select().from(searchProviders).where(eq(searchProviders.id, p.id)).limit(1);
+  if (!r) {
+    await audit({ adminId: admin.sub, adminEmail: admin.email, action: "search.provider.test", resourceType: "search_provider", resourceId: p.id, result: "failure" });
+    return c.json({ ok: false, error: after?.lastError ?? "搜索失败", latency_ms: latency }, 200);
+  }
+  await audit({ adminId: admin.sub, adminEmail: admin.email, action: "search.provider.test", resourceType: "search_provider", resourceId: p.id, result: "success" });
+  return c.json({ ok: true, provider: r.provider, results: r.results.length, latency_ms: latency, quota_remaining: after?.quotaRemaining ?? null, sample: r.results.slice(0, 2).map((x) => x.url) }, 200);
+});
+
+// WebFetch 连通性测试
+adminRoutes.post("/search/fetch-test", async (c) => {
+  const admin = c.get("admin")!;
+  const body = z.object({ url: z.string().url() }).parse(await c.req.json());
+  try {
+    const page = await webFetch(body.url, 1200);
+    await audit({ adminId: admin.sub, adminEmail: admin.email, action: "search.fetch_test", resourceType: "search_provider", resourceId: body.url, result: "success" });
+    return c.json({ ok: true, title: page.title, chars: page.text.length, sample: page.text.slice(0, 160) });
+  } catch (err) {
+    await audit({ adminId: admin.sub, adminEmail: admin.email, action: "search.fetch_test", resourceType: "search_provider", resourceId: body.url, result: "failure" });
+    return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 200);
+  }
 });
 
 // ---------- 平台设置 ----------

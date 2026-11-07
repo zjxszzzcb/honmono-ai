@@ -13,10 +13,11 @@ import { redisConnection, getQueue } from "./queues.js";
 import { executeChatAgent, withConversationLock, closeRedis } from "./agent-executor.js";
 import { executeConfigRun } from "./config-run.js";
 import { parseUpload } from "./parse-file.js";
-import { shutdownLangfuse, setupLangfuseOtel } from "@honmono/agent";
+import { shutdownLangfuse, setupGlobalProxy, setupLangfuseOtel } from "@honmono/agent";
 
 const CONCURRENCY = Number(process.env.WORKER_CONCURRENCY ?? 4);
 
+await setupGlobalProxy();
 await setupLangfuseOtel();
 
 // ============ 生产聊天 Run ============

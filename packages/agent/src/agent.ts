@@ -3,6 +3,7 @@ import type { Callbacks } from "@langchain/core/callbacks/manager";
 import type { BaseLanguageModel } from "@langchain/core/language_models/base";
 import { createDeepAgent, createFilesystemMiddleware, FilesystemBackend } from "deepagents";
 import { createSignalTools, createConfigCapabilityTools, type AgentEvent, type ResponseOutcome } from "./tools.js";
+import { WEB_TOOL_RULES } from "./websearch.js";
 import { ensureHarnessProfile, RESPONSE_NUDGE } from "./langfuse.js";
 
 export type { AgentEvent, ResponseOutcome };
@@ -48,6 +49,8 @@ export type RuntimeAgentDeps = {
   onEvent?: (e: AgentEvent) => void;
   callbacks?: Callbacks;
   recursionLimit?: number;
+  /** 额外工具（如 web_search / web_fetch）；提供时会自动附加联网使用规范 */
+  extraTools?: import("@langchain/core/tools").StructuredToolInterface[];
 };
 
 /** 运行时 Agent：只读文件工具 + response + ask_human */
@@ -58,9 +61,9 @@ export async function runRuntimeAgent(deps: RuntimeAgentDeps): Promise<ResponseO
   const backend = new FilesystemBackend({ rootDir: deps.skillRootDir, virtualMode: true });
   const agent = createDeepAgent({
     model: deps.model,
-    systemPrompt: composeRuntimeSystemPrompt(deps.skillMarkdown),
+    systemPrompt: composeRuntimeSystemPrompt(deps.skillMarkdown) + (deps.extraTools?.length ? WEB_TOOL_RULES : ""),
     backend,
-    tools: [responseTool, askHumanTool],
+    tools: deps.extraTools?.length ? [responseTool, askHumanTool, ...deps.extraTools] : [responseTool, askHumanTool],
     middleware: [createFilesystemMiddleware({ backend, tools: ["ls", "read_file", "glob", "grep"] })],
   });
 

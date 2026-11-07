@@ -219,6 +219,32 @@ serviceRoutes.get("/:id/files/tree", async (c) => {
   });
 });
 
+// 草稿文件内容保存（工作台编辑器）
+serviceRoutes.put("/:id/files/content", async (c) => {
+  const service = await requireOwnedService(c.req.param("id"), c.get("merchant")!.sub);
+  if (!service) return c.json({ error: "not_found" }, 404);
+  const draftVersionId = service.draftSkillVersionId;
+  if (!draftVersionId) return c.json({ error: "not_found", message: "草稿不存在" }, 404);
+  const draft = (await db.select().from(skillVersions).where(eq(skillVersions.id, draftVersionId)).limit(1))[0];
+  if (!draft) return c.json({ error: "not_found", message: "草稿不存在" }, 404);
+  const body = z
+    .object({
+      path: z.string().min(1).max(300).regex(/^[\w.\-/\u4e00-\u9fa5]+$/, "路径包含非法字符"),
+      content: z.string().max(512 * 1024),
+    })
+    .parse(await c.req.json());
+  const rel = body.path.replace(/^\/+/, "");
+  try {
+    const draftAbs = storage.resolveWithin(draft.rootPath);
+    const abs = storage.resolveWithin(`${draft.rootPath}/${rel}`);
+    if (!abs.startsWith(draftAbs) || abs === draftAbs) return c.json({ error: "forbidden", message: "路径越界" }, 403);
+    await storage.writeText(`${draft.rootPath}/${rel}`, body.content);
+    return c.json({ ok: true, path: rel, saved_at: new Date().toISOString() });
+  } catch (err) {
+    return c.json({ error: "forbidden", message: err instanceof Error ? err.message : "保存失败" }, 403);
+  }
+});
+
 // 草稿文件内容预览（只读；路径强制围栏在草稿目录内）
 serviceRoutes.get("/:id/files/preview", async (c) => {
   const service = await requireOwnedService(c.req.param("id"), c.get("merchant")!.sub);

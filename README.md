@@ -18,6 +18,8 @@ skills/
 deploy/dev     开发用 compose（本地 Node + 容器化中间件）
 ```
 
+**配置工作台**：`/services/:id/configure` 为 VSCode 式三栏布局——左侧资源管理器（草稿文件树实时刷新，上传原件自动存入 `assets/raw/`）、中间多 Tab 文本编辑器（可编辑保存，⌘S）、右侧配置助手对话（打字机效果）。
+
 **Agent 运行方式**：`deepagents`（LangGraph）+ 固定加载当前 Skill 版本（SKILL.md 进系统提示词）；文件工具 `ls/read_file/glob/grep` 通过 `FilesystemBackend({ virtualMode: true })` 限定在版本目录内（拦截 `..`/`~`/symlink 逃逸）；配置 Agent 额外具备 `write_file/edit_file` 与服务端固定实现的 `validate_skill/publish_skill`；危险工具（delete/execute/task 子代理）一律排除。运行时 Agent 只能通过 `response`（text, sleep 0 或 2–30s）回复、通过 `ask_human` 转人工。
 
 ## 快速开始（Docker Compose 全量部署）
@@ -61,6 +63,21 @@ npm run dev:web &       # http://localhost:5173（代理 /api、/v1）
 - 所有业务数据在 PostgreSQL（商户 / 客服 / Skill 版本 / 消息 / Run / 求助 / Key / LLM 配置 / 审计）。
 - 文件与 Skill 版本落在 `STORAGE_ROOT`：`merchants/{mid}/services/{sid}/drafts|versions|incoming`；数据库只存相对路径。
 - 发布 = 草稿目录复制为不可变版本 + 原子切换 `active_skill_version_id`（只改数据库指针）。
+
+## 联网搜索（WebSearch / WebFetch）
+
+管理员在 `/admin/llm`（模型与搜索服务）配置搜索供应商（**Brave** / **Exa**），运行时 Agent 自动获得：
+
+- `web_search`：联网搜索公开信息；多供应商**额度感知自动轮换**（响应头额度采集 → 402/429 错误冷却切换 → LRU 均衡），状态与剩余额度在管理页可见
+- `web_fetch`：读取网页正文（SSRF 防护：拦截内网/环回地址与重定向逃逸，2MB 上限）
+- 商户政策以知识文件为准的提示词约束，搜索结果要求附带来源 URL
+
+中国网络部署：在 `.env` 设置标准代理变量即可（应用启动时全局生效，无需前端配置）：
+
+```
+HTTPS_PROXY=http://127.0.0.1:7890
+NO_PROXY=localhost,127.0.0.1,<模型网关地址>
+```
 
 ## 安全要点（已实现）
 

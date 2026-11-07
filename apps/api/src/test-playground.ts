@@ -5,6 +5,8 @@ import {
   appendMessage,
   conversations,
   db,
+  decryptSecret,
+  searchProviders,
   createRunIdempotent,
   getOrCreateConversation,
   getSkillVersion,
@@ -15,7 +17,7 @@ import {
   type CustomerService,
 } from "@honmono/db";
 import * as storage from "@honmono/storage";
-import { composeRuntimeSystemPrompt, createRunTracer, runRuntimeAgent } from "@honmono/agent";
+import { composeRuntimeSystemPrompt, createRunTracer, runRuntimeAgent, SearchRouter, createWebTools } from "@honmono/agent";
 import { TestRunInput } from "@honmono/contracts";
 
 const activeTestRuns = new Set<string>();
@@ -99,12 +101,38 @@ export async function runTestPlayground(
       });
 
       const skillMd = await storage.readText(`${version.rootPath}/SKILL.md`);
+      // 搜索供应商 → web 工具
+      let extraTools: Parameters<typeof runRuntimeAgent>[0]["extraTools"];
+      try {
+        const provs = await db.select().from(searchProviders).where(eq(searchProviders.status, "active"));
+        if (provs.length > 0) {
+          const router = new SearchRouter(
+            provs.map((p) => ({ id: p.id, name: p.name, type: p.type as "brave" | "exa", apiKey: decryptSecret(p.apiKeyEncrypted) })),
+            {
+              persist: (pid, patch) => {
+                const { lastUsedAt, ...rest } = patch;
+                db.update(searchProviders)
+                  .set({ ...rest, ...(lastUsedAt ? { lastUsedAt } : {}), lastCheckedAt: new Date(), updatedAt: new Date() })
+                  .where(eq(searchProviders.id, pid))
+                  .catch(() => {});
+              },
+            },
+          );
+          const { webSearchTool, webFetchTool } = createWebTools(router, (e) =>
+            events.push({ type: "tool.started", name: e.name, summary: e.summary } as { type: string }),
+          );
+          extraTools = [webSearchTool, webFetchTool];
+        }
+      } catch {
+        extraTools = undefined;
+      }
       const agentPromise = runRuntimeAgent({
         model: (await import("@honmono/agent")).createChatModel(resolved),
         modelKey: resolved.modelKey,
         skillRootDir: storage.resolveWithin(version.rootPath),
         skillMarkdown: skillMd,
         chatMessages: [...chatTurns, { role: "user", content: body.content }],
+        extraTools,
         onEvent: (e) => events.push(e as { type: string }),
         callbacks: (tracer ? [tracer.handler] : []) as unknown as undefined | import("@langchain/core/callbacks/manager").Callbacks,
       }).finally(release);

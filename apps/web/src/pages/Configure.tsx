@@ -4,10 +4,9 @@ import { api } from "../auth";
 import { MerchantLayout } from "./layout";
 import { Composer } from "../components/Composer";
 import { TypewriterText } from "../components/Typewriter";
-import { FileTree } from "../components/FileTree";
+import { Explorer } from "../components/Explorer";
 
 type Msg = { id: number; role: string; author_type: string; content: string; created_at: string };
-type FileRow = { id: string; name: string; size: number; parse_status: string; parse_report: Record<string, unknown> | null };
 type ServiceDetail = {
   id: string;
   name: string;
@@ -16,28 +15,35 @@ type ServiceDetail = {
   active: { version: number; publishedAt: string } | null;
 };
 
+type EditorTab = { path: string; content: string; saved: string; loading: boolean };
+
 export function Configure() {
   const { id } = useParams<{ id: string }>();
   return (
-    <MerchantLayout>
-      <ConfigureInner id={id!} />
+    <MerchantLayout wide>
+      <Workbench id={id!} />
     </MerchantLayout>
   );
 }
 
-const UPLOAD_HINT = "直接描述你的公司和产品即可。也可以上传产品手册、价格表、FAQ、售后政策等文件；支持多文件。图片暂不做 OCR，多模态模型可直接读取支持的图片。";
+const UPLOAD_HINT = "直接描述你的公司和产品即可，也可以上传资料文件。图片暂不做 OCR。";
 
-function ConfigureInner({ id }: { id: string }) {
+function Workbench({ id }: { id: string }) {
   const [detail, setDetail] = useState<ServiceDetail | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [run, setRun] = useState<{ id: string; state: string | null } | null>(null);
-  const [files, setFiles] = useState<FileRow[]>([]);
   const [uploading, setUploading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const lastServerIdRef = useRef(0);
   const [treeKey, setTreeKey] = useState(0);
 
-  /** 全量刷新（服务端为唯一事实源，彻底避免本地乐观插入与服务端 id 不一致导致的重复） */
+  // 编辑器状态
+  const [tabs, setTabs] = useState<EditorTab[]>([]);
+  const [activePath, setActivePath] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [savedFlash, setSavedFlash] = useState<string | null>(null);
+  const [showGuidesNote, setShowGuidesNote] = useState(true);
+
   const refresh = useCallback(async () => {
     const d = await api<ServiceDetail>(`/api/customer-services/${id}`);
     setDetail(d);
@@ -47,14 +53,12 @@ function ConfigureInner({ id }: { id: string }) {
     setMessages(conv.messages);
     setRun(conv.run);
     if (conv.messages.length) lastServerIdRef.current = conv.messages.at(-1)!.id;
-    setFiles(await api<FileRow[]>(`/api/customer-services/${id}/files`));
   }, [id]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  // 有活动 Run 时轮询：只增量合并服务端消息（id 一定大于已记录的服务端最大 id）
   useEffect(() => {
     if (!run?.state || ["succeeded", "failed", "superseded"].includes(run.state)) return;
     const t = setInterval(async () => {
@@ -71,7 +75,7 @@ function ConfigureInner({ id }: { id: string }) {
         setRun(conv.run);
         if (conv.run === null) {
           clearInterval(t);
-          refresh(); // 终态：全量对齐一次（readiness/文件状态）
+          refresh();
           setTreeKey((k) => k + 1);
         }
       } catch {
@@ -91,7 +95,7 @@ function ConfigureInner({ id }: { id: string }) {
         method: "POST",
         body: JSON.stringify({ content }),
       });
-      await refresh(); // POST 返回即已包含新消息，立即对齐
+      await refresh();
     } catch (err) {
       alert(err instanceof Error ? err.message : "发送失败");
     }
@@ -108,10 +112,76 @@ function ConfigureInner({ id }: { id: string }) {
         const body = await res.json().catch(() => ({}));
         alert((body as { message?: string }).message ?? "上传失败");
       }
-      await refresh();
       setTreeKey((k) => k + 1);
     } finally {
       setUploading(false);
+    }
+  };
+
+  // ============ 编辑器 ============
+  const openFile = async (path: string) => {
+    const existing = tabs.find((t) => t.path === path);
+    if (existing) {
+      setActivePath(path);
+      return;
+    }
+    setTabs((prev) => [...prev, { path, content: "", saved: "", loading: true }]);
+    setActivePath(path);
+    try {
+      const p = await api<{ path: string; content: string }>(
+        `/api/customer-services/${id}/files/preview?path=${encodeURIComponent(path)}`,
+      );
+      setTabs((prev) => prev.map((t) => (t.path === path ? { ...t, content: p.content, saved: p.content, loading: false } : t)));
+    } catch (err) {
+      setTabs((prev) =>
+        prev.map((t) => (t.path === path ? { ...t, content: `# 读取失败\n\n${err instanceof Error ? err.message : "未知错误"}`, saved: "", loading: false } : t)),
+      );
+    }
+  };
+
+  const activeTab = tabs.find((t) => t.path === activePath) ?? null;
+  const dirty = activeTab ? activeTab.content !== activeTab.saved : false;
+
+  const updateContent = (content: string) => {
+    setTabs((prev) => prev.map((t) => (t.path === activePath ? { ...t, content } : t)));
+  };
+
+  const saveFile = useCallback(async () => {
+    const tab = tabs.find((t) => t.path === activePath);
+    if (!tab || tab.loading || tab.content === tab.saved) return;
+    setSaving(true);
+    try {
+      await api(`/api/customer-services/${id}/files/content`, {
+        method: "PUT",
+        body: JSON.stringify({ path: tab.path, content: tab.content }),
+      });
+      setTabs((prev) => prev.map((t) => (t.path === tab.path ? { ...t, saved: t.content } : t)));
+      setSavedFlash(`${tab.path.split("/").pop()} 已保存`);
+      setTimeout(() => setSavedFlash(null), 2200);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "保存失败");
+    } finally {
+      setSaving(false);
+    }
+  }, [tabs, activePath, id]);
+
+  // Cmd/Ctrl+S 保存
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        if (dirty) saveFile();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [dirty, saveFile]);
+
+  const closeTab = (path: string) => {
+    setTabs((prev) => prev.filter((t) => t.path !== path));
+    if (activePath === path) {
+      const rest = tabs.filter((t) => t.path !== path);
+      setActivePath(rest.length ? rest.at(-1)!.path : null);
     }
   };
 
@@ -119,22 +189,92 @@ function ConfigureInner({ id }: { id: string }) {
   const lastAssistantId = [...messages].reverse().find((m) => m.role === "assistant")?.id;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-      <div className="card flex h-[calc(100vh-150px)] flex-col overflow-hidden">
-        <div className="border-b border-slate-100 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-[17px] font-semibold text-slate-900">{detail?.name ?? "…"} · 配置</h2>
-              <p className="mt-0.5 text-xs leading-relaxed text-slate-400">{UPLOAD_HINT}</p>
-            </div>
-            <StatusChip detail={detail} />
-          </div>
+    <div className="grid gap-4 xl:grid-cols-[240px_1fr_400px]">
+      {/* ===== 资源管理器 ===== */}
+      <div className="card h-[calc(100vh-150px)] overflow-hidden border-slate-200 bg-[#fbfbfc]">
+        <Explorer serviceId={id} refreshKey={treeKey} activePath={activePath} onOpen={openFile} onUpload={upload} uploading={uploading} />
+      </div>
+
+      {/* ===== 编辑器 ===== */}
+      <div className="card flex h-[calc(100vh-150px)] min-w-0 flex-col overflow-hidden">
+        {/* tab 栏 */}
+        <div className="flex items-center gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50 px-2 pt-1.5">
+          {tabs.length === 0 && <span className="px-3 py-2 text-xs text-slate-400">未打开文件</span>}
+          {tabs.map((t) => {
+            const isDirty = t.content !== t.saved;
+            const active = t.path === activePath;
+            return (
+              <div
+                key={t.path}
+                className={`group flex shrink-0 items-center gap-1.5 rounded-t-lg border border-b-0 px-3 py-1.5 text-xs ${
+                  active ? "border-slate-200 bg-white text-slate-800" : "border-transparent text-slate-500 hover:bg-slate-100"
+                }`}
+              >
+                <button className="max-w-[200px] truncate font-mono" onClick={() => setActivePath(t.path)} title={t.path}>
+                  {t.path.split("/").pop()}
+                  {isDirty ? " ●" : ""}
+                </button>
+                <button className="text-slate-300 hover:text-slate-600" onClick={() => closeTab(t.path)}>
+                  ✕
+                </button>
+              </div>
+            );
+          })}
         </div>
 
-        <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
+        {activeTab ? (
+          <>
+            <div className="flex items-center justify-between border-b border-slate-100 bg-white px-4 py-2">
+              <span className="truncate font-mono text-xs text-slate-500">{activeTab.path}</span>
+              <div className="flex items-center gap-2">
+                {savedFlash && <span className="text-xs text-green-600">{savedFlash}</span>}
+                {dirty && <span className="text-xs text-amber-600">未保存</span>}
+                <button className="btn-primary !px-3 !py-1 text-xs" onClick={saveFile} disabled={!dirty || saving || activeTab.loading}>
+                  {saving ? "保存中…" : "保存 ⌘S"}
+                </button>
+              </div>
+            </div>
+            {activeTab.loading ? (
+              <div className="flex flex-1 items-center justify-center text-sm text-slate-400">加载中…</div>
+            ) : (
+              <textarea
+                className="min-h-0 flex-1 resize-none bg-[#fbfbfc] p-4 font-mono text-[12.5px] leading-relaxed text-slate-700 outline-none"
+                value={activeTab.content}
+                onChange={(e) => updateContent(e.target.value)}
+                spellCheck={false}
+              />
+            )}
+            <div className="flex items-center justify-between border-t border-slate-100 bg-white px-4 py-1.5 text-[11px] text-slate-400">
+              <span>Markdown · UTF-8</span>
+              <span>{dirty ? "有未保存修改" : "已同步"}</span>
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 text-slate-300">
+            <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <path d="M14 2v6h6M9 13h6M9 17h6" />
+            </svg>
+            <p className="text-sm">点击左侧文件开始编辑</p>
+            <p className="text-xs">修改 SKILL.md 或 references 后，可在右侧让配置助手核对并发布新版本</p>
+          </div>
+        )}
+      </div>
+
+      {/* ===== 配置聊天 ===== */}
+      <div className="card flex h-[calc(100vh-150px)] flex-col overflow-hidden">
+        <div className="border-b border-slate-100 px-4 py-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-[15px] font-semibold text-slate-900">{detail?.name ?? "…"} · 配置助手</h2>
+            <StatusChip detail={detail} />
+          </div>
+          <p className="mt-0.5 text-[11px] leading-relaxed text-slate-400">{UPLOAD_HINT}</p>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
           <div className="msg-enter flex justify-start">
-            <div className="max-w-[86%] rounded-2xl rounded-bl-md border border-orange-100 bg-gradient-to-br from-orange-50 to-amber-50 px-4 py-3 text-sm leading-relaxed text-[#8a5a2e]">
-              👋 欢迎使用配置向导。请描述你要做的客服：产品/业务是什么、希望客服负责什么。也可以先上传资料文件，我会阅读后再向你提问。
+            <div className="max-w-[92%] rounded-2xl rounded-bl-md border border-orange-100 bg-gradient-to-br from-orange-50 to-amber-50 px-3.5 py-2.5 text-[13px] leading-relaxed text-[#8a5a2e]">
+              👋 描述你要做的客服，或上传资料（自动存入 <code className="rounded bg-white/70 px-1 font-mono text-[11px]">assets/raw/</code>）。我会阅读后向你提问，文件改动我可以核对并发布。
             </div>
           </div>
           {messages.map((m) => {
@@ -143,7 +283,7 @@ function ConfigureInner({ id }: { id: string }) {
             const animate = !isUser && !isSystem && m.id === lastAssistantId;
             return (
               <div key={m.id} className={`msg-enter flex ${isUser ? "justify-end" : "justify-start"}`}>
-                <div className={isUser ? "bubble-user" : isSystem ? "bubble-system" : "bubble-ai"}>
+                <div className={isUser ? "bubble-user !max-w-[92%]" : isSystem ? "bubble-system" : "bubble-ai !max-w-[94%] !text-[13px]"}>
                   {isUser ? m.content : <TypewriterText text={m.content} enabled={animate} />}
                 </div>
               </div>
@@ -151,8 +291,8 @@ function ConfigureInner({ id }: { id: string }) {
           })}
           {busyRun && (
             <div className="msg-enter flex justify-start">
-              <div className="bubble-ai flex items-center gap-1.5 !text-slate-400">
-                配置助手正在分析草稿与资料
+              <div className="bubble-ai flex items-center gap-1.5 !max-w-[94%] !text-[13px] !text-slate-400">
+                正在分析草稿与资料
                 <span className="thinking-dot" />
                 <span className="thinking-dot" />
                 <span className="thinking-dot" />
@@ -162,74 +302,43 @@ function ConfigureInner({ id }: { id: string }) {
           <div ref={bottomRef} />
         </div>
 
-        <div className="border-t border-slate-100 px-4 pb-4 pt-3">
+        {/* 状态条 */}
+        <div className="border-t border-slate-100 bg-slate-50/70 px-4 py-2">
+          <div className="flex items-center justify-between text-[11px]">
+            <span>
+              {detail?.active ? (
+                <>
+                  <span className="font-semibold text-[#FF5000]">v{detail.active.version}</span> 运行中
+                  {detail.draft?.readiness?.blockers && detail.draft.readiness.blockers.length > 0 ? (
+                    <span className="text-amber-600"> · 草稿有 {detail.draft.readiness.blockers.length} 项待补齐</span>
+                  ) : (
+                    <span className="text-slate-400"> · 草稿就绪</span>
+                  )}
+                </>
+              ) : (
+                <span className="text-slate-400">尚未发布 · 补齐关键信息后自动发布</span>
+              )}
+            </span>
+            <Link className="text-[#FF5000] hover:underline" to={`/services/${id}/test`}>
+              去测试 →
+            </Link>
+          </div>
+          {detail?.draft?.readiness?.blockers && detail.draft.readiness.blockers.length > 0 && showGuidesNote && (
+            <ul className="mt-1 list-disc pl-4 text-[11px] text-amber-700">
+              {detail.draft.readiness.blockers.slice(0, 2).map((b, i) => (
+                <li key={i}>{b}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="border-t border-slate-100 px-3 pb-3 pt-2.5">
           <Composer
-            placeholder="输入配置信息，Enter 发送，Shift+Enter 换行"
+            placeholder="向配置助手描述需求…"
             disabled={busyRun}
             onSend={send}
-            attach={{
-              onFiles: upload,
-              accept: ".md,.txt,.csv,.json,.pdf,.docx,.xlsx,.xls,.png,.jpg,.jpeg,.webp",
-            }}
-            attachLabel="上传资料"
+            sendLabel="Enter 发送"
           />
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <div className="card p-5">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="font-semibold text-slate-900">状态</h3>
-            {detail?.active && <span className="badge badge-brand">v{detail.active.version} 已发布</span>}
-          </div>
-          {detail?.active ? (
-            <p className="text-sm text-slate-600">
-              ✅ 客服可用，当前运行 <span className="font-semibold text-[#FF5000]">v{detail.active.version}</span>
-              ，继续补充资料会自动发布新版本。
-            </p>
-          ) : (
-            <p className="text-sm text-slate-500">尚未发布可用版本，按助手引导补齐关键信息即可自动发布。</p>
-          )}
-          {detail?.draft?.readiness?.blockers && detail.draft.readiness.blockers.length > 0 && (
-            <div className="mt-3 rounded-xl bg-amber-50/70 p-3 text-xs text-amber-800">
-              <p className="mb-1 font-medium">待补齐：</p>
-              <ul className="list-disc pl-4">
-                {detail.draft.readiness.blockers.map((b, i) => (
-                  <li key={i}>{b}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <Link className="btn-primary mt-4 w-full" to={`/services/${id}/test`}>
-            去测试台体验 →
-          </Link>
-        </div>
-
-        <div className="card p-5">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="font-semibold text-slate-900">资料文件</h3>
-            <span className="text-xs text-slate-400">{uploading ? "上传中…" : `${files.length} 个`}</span>
-          </div>
-          {files.length === 0 && <p className="text-xs text-slate-400">还没有上传文件，点输入框左侧 ＋ 上传</p>}
-          <ul className="space-y-1.5">
-            {files.map((f) => (
-              <li key={f.id} className="flex items-center justify-between rounded-xl border border-slate-100 px-3 py-2">
-                <span className="max-w-[62%] truncate text-[13px] text-slate-700" title={f.name}>
-                  📎 {f.name}
-                </span>
-                <ParseBadge status={f.parse_status} />
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="card p-5">
-          <div className="mb-2 flex items-center justify-between">
-            <h3 className="font-semibold text-slate-900">Skill 工作目录</h3>
-            <span className="badge badge-brand">drafts</span>
-          </div>
-          <p className="mb-2 text-xs text-slate-400">配置助手实时写入的技能文件，点击可预览内容</p>
-          <FileTree serviceId={id} refreshKey={treeKey} />
         </div>
       </div>
     </div>
@@ -244,18 +353,5 @@ function StatusChip({ detail }: { detail: ServiceDetail | null }) {
     disabled: ["已停用", "bg-slate-200 text-slate-500"],
   };
   const [label, cls] = map[detail.status] ?? [detail.status, "bg-slate-100"];
-  return <span className={`badge ${cls}`}>{label}</span>;
-}
-
-function ParseBadge({ status }: { status: string }) {
-  const map: Record<string, [string, string]> = {
-    pending: ["等待解析", "bg-slate-100 text-slate-500"],
-    parsing: ["解析中", "bg-blue-50 text-blue-600"],
-    parsed: ["已解析", "bg-green-50 text-green-600"],
-    partial: ["部分解析", "bg-amber-50 text-amber-600"],
-    unsupported: ["不支持", "bg-slate-100 text-slate-400"],
-    failed: ["失败", "bg-red-50 text-red-500"],
-  };
-  const [label, cls] = map[status] ?? [status, "bg-slate-100"];
   return <span className={`badge ${cls}`}>{label}</span>;
 }

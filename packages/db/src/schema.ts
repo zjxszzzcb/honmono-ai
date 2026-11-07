@@ -224,6 +224,23 @@ export const platformSettings = pgTable("platform_settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const searchProviders = pgTable("search_providers", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  type: text("type").notNull(), // brave | exa
+  apiKeyEncrypted: text("api_key_encrypted").notNull(),
+  apiKeyMask: text("api_key_mask").notNull(),
+  status: text("status").notNull().default("active"), // active | disabled
+  priority: integer("priority").notNull().default(0),
+  quotaRemaining: integer("quota_remaining"),
+  lastStatus: text("last_status"), // ok | rate_limited | exhausted | error
+  lastError: text("last_error"),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const adminAuditLogs = pgTable("admin_audit_logs", {
   id: uuid("id").primaryKey().defaultRandom(),
   adminId: uuid("admin_id"),
@@ -256,3 +273,4 @@ export type Handoff = typeof handoffs.$inferSelect;
 export type LlmProvider = typeof llmProviders.$inferSelect;
 export type LlmModel = typeof llmModels.$inferSelect;
 export type ModelAssignment = typeof modelAssignments.$inferSelect;
+export type SearchProvider = typeof searchProviders.$inferSelect;

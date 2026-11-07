@@ -10,7 +10,7 @@ import { serviceRoutes } from "./routes/services.js";
 import { publicRoutes } from "./routes/public.js";
 import { adminRoutes } from "./routes/admin.js";
 import { ensureDirs } from "./boot.js";
-import { setupLangfuseOtel } from "@honmono/agent";
+import { setupGlobalProxy, setupLangfuseOtel } from "@honmono/agent";
 
 const app = new Hono<AppEnv>();
 
@@ -61,6 +61,7 @@ app.onError((err, c) => {
   return c.json({ error: err.name, message }, status as 400 | 500);
 });
 
+await setupGlobalProxy();
 await setupLangfuseOtel();
 await ensureDirs();
 

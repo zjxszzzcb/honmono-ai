@@ -1,24 +1,29 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc } from "drizzle-orm";
 import { Redis } from "ioredis";
 import {
   appendMessage,
   conversations,
   customerServices,
   db,
+  decryptSecret,
   getRunById,
-  listMessages,
-  resolveModel,
-  transitionRun,
-  ModelNotConfiguredError,
   getSkillVersion,
   getSetting,
+  listMessages,
+  resolveModel,
+  searchProviders,
+  transitionRun,
+  ModelNotConfiguredError,
   type ResolvedModel,
 } from "@honmono/db";
+import { eq } from "drizzle-orm";
 import * as storage from "@honmono/storage";
 import {
   createChatModel,
   createRunTracer,
   runRuntimeAgent,
+  SearchRouter,
+  createWebTools,
   type ChatTurn,
   type ResponseOutcome,
 } from "@honmono/agent";
@@ -136,6 +141,7 @@ export async function executeChatAgent(input: {
   const startedAt = Date.now();
   let outcome: ResponseOutcome;
   try {
+    const extraTools = await buildWebToolsIfConfigured();
     outcome = await withTimeout(
       runRuntimeAgent({
         model: createChatModel(resolved),
@@ -143,6 +149,7 @@ export async function executeChatAgent(input: {
         skillRootDir: storage.resolveWithin(version.rootPath),
         skillMarkdown: await storage.readText(`${version.rootPath}/SKILL.md`),
         chatMessages: await loadChatTurns(conv.id),
+        extraTools,
         callbacks: (tracer ? [tracer.handler] : []) as unknown as undefined,
       }),
       timeoutSeconds * 1000,
@@ -238,6 +245,31 @@ function withTimeout<T>(p: Promise<T>, ms: number, tag: string): Promise<T> {
       },
     );
   });
+}
+
+/** 加载启用的搜索供应商并构建 web 工具；无供应商返回 undefined */
+export async function buildWebToolsIfConfigured() {
+  try {
+    const provs = await db.select().from(searchProviders).where(eq(searchProviders.status, "active"));
+    if (provs.length === 0) return undefined;
+    const router = new SearchRouter(
+      provs.map((p) => ({ id: p.id, name: p.name, type: p.type as "brave" | "exa", apiKey: decryptSecret(p.apiKeyEncrypted) })),
+      {
+        persist: (id, patch) => {
+          const { lastUsedAt, ...rest } = patch;
+          db.update(searchProviders)
+            .set({ ...rest, ...(lastUsedAt ? { lastUsedAt } : {}), lastCheckedAt: new Date(), updatedAt: new Date() })
+            .where(eq(searchProviders.id, id))
+            .catch(() => {});
+        },
+      },
+    );
+    const { webSearchTool, webFetchTool } = createWebTools(router);
+    return [webSearchTool, webFetchTool];
+  } catch (err) {
+    console.warn("[worker] web tools init failed:", err instanceof Error ? err.message : err);
+    return undefined;
+  }
 }
 
 export async function closeRedis() {

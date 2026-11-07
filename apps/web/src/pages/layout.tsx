@@ -8,7 +8,7 @@ const STATUS_BADGE: Record<string, string> = {
   disabled: "bg-slate-200 text-slate-500",
 };
 
-export function MerchantLayout({ children, active }: { children: React.ReactNode; active?: string }) {
+export function MerchantLayout({ children, active, wide }: { children: React.ReactNode; active?: string; wide?: boolean }) {
   const { merchant, refresh } = useAuth();
   const nav = useNavigate();
 
@@ -37,7 +37,7 @@ export function MerchantLayout({ children, active }: { children: React.ReactNode
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
+      <main className={wide ? "px-4 py-5" : "mx-auto max-w-6xl px-6 py-8"}>{children}</main>
     </div>
   );
 }
