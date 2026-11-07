@@ -82,36 +82,70 @@ e2e-package     王者荣耀示例                    资料包 zip + 测试用�
 
 ## 🖼️ 产品导览
 
-上传资料包 → Agent 自主归纳 → `ask_user` 卡片只问"查不到、必须商户拍板"的事（连推荐理由都准备好）：
+以下截图按真实使用顺序排列（王者荣耀示例），每张对应一个关键环节。
 
-| 工作台 · 资料包已解包 | ask_user 选项卡片 |
-| --- | --- |
-| ![工作台](docs/screenshots/02-workbench-upload-zip.png) | ![ask_user 卡片](docs/screenshots/04-ask-user-card.png) |
+**1. 上传资料包** —— zip 自动解包，5 份资料逐个解析归档，无需手工整理：
 
-| 草稿实时可查可改 | 联网研究笔记（来源 + 置信度） |
-| --- | --- |
-| ![编辑器 SKILL.md](docs/screenshots/05-workbench-editor-skillmd.png) | ![研究笔记](docs/screenshots/06-research-notes-preview.png) |
+![上传资料包后，聊天中逐条报告解包与解析结果](docs/screenshots/02-workbench-upload-zip.png)
 
-测试台与生产同核——知识内问题直答、时效问题联网带来源、边界问题拒答、拿不准转人工：
+**2. 缺口采访** —— Agent 读完资料后，用 `ask_user` 选项卡片只问"查不到、必须商户拍板"的事（连推荐理由都准备好）：
 
-| SSE 事件时间线 + 联网回答 | 触发转人工 |
-| --- | --- |
-| ![测试台联网搜索](docs/screenshots/07-test-playground-websearch.png) | ![测试台转人工](docs/screenshots/08-test-playground-ask-human.png) |
+![ask_user 选项卡片：称呼方案、语气、转人工渠道](docs/screenshots/04-ask-user-card.png)
 
-人工接管台：建议回复一键选用，接管期间 AI 静默，交还即恢复：
+**3. 追问故意留白** —— 资料中"赛事内容"与"月卡/战令退款细则"两处留白，Agent 给出带权衡选项的确认卡片，而不是擅自编造：
 
-| 人工接管台 | 建议回复并恢复 AI |
-| --- | --- |
-| ![人工接管台](docs/screenshots/09-handoff-center-pending.png) | ![恢复 AI](docs/screenshots/10-handoff-reply-resume.png) |
+![针对资料留白的第二轮确认卡片](docs/screenshots/04b-ask-user-followup-gaps.png)
+
+**4. 草稿实时可查可改** —— 三栏等高：左聊天、中文件树（含 `assets/raw/` 上传原件）、右编辑器直接修改 SKILL.md（⌘S 保存）：
+
+![编辑器打开 Agent 生成的 SKILL.md](docs/screenshots/05-workbench-editor-skillmd.png)
+
+**5. 联网研究笔记** —— 自主检索的赛程/热线信息逐条带来源 URL 与置信度，"未采信的第三方信息"单独归档：
+
+![编辑器打开 research-notes.md](docs/screenshots/06-research-notes-editor.png)
+
+**6. 测试台（SSE 时间线 + 联网回答）** —— 与生产同核；时间线实时展示 `web_search` 调用，回答含赛程与来源：
+
+![测试台时间线与联网回答](docs/screenshots/07-test-playground-websearch.png)
+
+**7. 触发转人工** —— 盗号投诉超出客服边界，Agent 不硬答，创建带建议回复的工单：
+
+![测试台触发转人工](docs/screenshots/08-test-playground-ask-human.png)
+
+**8. 人工接管台** —— 跨客服工单聚合（原因 / 上下文摘要 / 建议回复一键选用）：
+
+![人工接管台待处理工单](docs/screenshots/09-handoff-center-pending.png)
+
+**9. 处理并恢复 AI** —— 选用建议回复发送后，会话交还 AI 自动应答：
+
+![建议回复发送并恢复 AI](docs/screenshots/10-handoff-reply-resume.png)
 
 <details>
-<summary><strong>更多截图</strong>（看板 / 管理后台 / Langfuse）</summary>
+<summary><strong>更多系统截图</strong>（看板 / 管理后台 / Langfuse）</summary>
 
-| | |
-| --- | --- |
-| ![Dashboard](docs/screenshots/01-dashboard.png) | ![Langfuse Traces](docs/screenshots/13-langfuse-traces.png) |
-| ![Langfuse Trace 详情](docs/screenshots/14-langfuse-trace-detail.png) | ![审计日志](docs/screenshots/12-admin-audit-logs.png) |
-| ![管理后台概览](docs/screenshots/11-admin-overview.png) | ![配置聊天](docs/screenshots/03-config-chat-thinking.png) |
+**商户看板** —— 多 Agent 卡片管理与状态统计：
+
+![商户看板](docs/screenshots/01-dashboard.png)
+
+**配置对话分析中** —— Agent 工作期间可随时插话打断：
+
+![配置对话分析中](docs/screenshots/03-config-chat-thinking.png)
+
+**Langfuse · Traces 列表** —— 每个 Run 一条 trace，输入输出一目了然：
+
+![Langfuse Traces 列表](docs/screenshots/13-langfuse-traces.png)
+
+**Langfuse · Trace 详情** —— LangGraph span 树：模型调用（token 用量）、工具参数与返回内容：
+
+![Langfuse Trace 详情](docs/screenshots/14-langfuse-trace-detail.png)
+
+**管理后台 · 概览**：
+
+![管理后台概览](docs/screenshots/11-admin-overview.png)
+
+**管理后台 · 审计日志** —— 管理员关键操作全量留痕：
+
+![审计日志](docs/screenshots/12-admin-audit-logs.png)
 
 </details>
 
