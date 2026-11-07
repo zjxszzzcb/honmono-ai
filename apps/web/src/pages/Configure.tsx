@@ -5,6 +5,7 @@ import { MerchantLayout } from "./layout";
 import { Composer } from "../components/Composer";
 import { TypewriterText } from "../components/Typewriter";
 import { Explorer } from "../components/Explorer";
+import { LogoMark } from "../components/Logo";
 
 type Msg = { id: number; role: string; author_type: string; content: string; created_at: string };
 type ServiceDetail = {
@@ -26,8 +27,6 @@ export function Configure() {
   );
 }
 
-const UPLOAD_HINT = "直接描述你的公司和产品即可，也可以上传资料文件。图片暂不做 OCR。";
-
 function Workbench({ id }: { id: string }) {
   const [detail, setDetail] = useState<ServiceDetail | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -37,12 +36,13 @@ function Workbench({ id }: { id: string }) {
   const lastServerIdRef = useRef(0);
   const [treeKey, setTreeKey] = useState(0);
 
+  // 面板状态：null = 自动（agent 干活后自动展开）；手动开合后固定
+  const [panelOpen, setPanelOpen] = useState<boolean | null>(null);
   // 编辑器状态
   const [tabs, setTabs] = useState<EditorTab[]>([]);
   const [activePath, setActivePath] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState<string | null>(null);
-  const [showGuidesNote, setShowGuidesNote] = useState(true);
 
   const refresh = useCallback(async () => {
     const d = await api<ServiceDetail>(`/api/customer-services/${id}`);
@@ -165,7 +165,6 @@ function Workbench({ id }: { id: string }) {
     }
   }, [tabs, activePath, id]);
 
-  // Cmd/Ctrl+S 保存
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
@@ -187,17 +186,123 @@ function Workbench({ id }: { id: string }) {
 
   const busyRun = Boolean(run?.state && !["succeeded", "failed", "superseded"].includes(run.state));
   const lastAssistantId = [...messages].reverse().find((m) => m.role === "assistant")?.id;
+  // agent 已经开始工作（有 AI 回复或已发布过版本）
+  const hasAgentActivity = Boolean(detail?.active) || messages.some((m) => m.role === "assistant" && m.author_type === "ai");
+  const showFiles = panelOpen ?? hasAgentActivity;
+
+  const chatPanel = (
+    <div className={`card flex min-h-0 flex-col overflow-hidden ${showFiles ? "min-w-[420px]" : "mx-auto h-full w-full max-w-3xl"}`}>
+      <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
+        <div className="flex items-center gap-2.5">
+          {!showFiles && <LogoMark size={30} />}
+          <div>
+            <h2 className="text-[15px] font-semibold text-slate-900">{detail?.name ?? "…"} · 配置助手</h2>
+            {!showFiles && (
+              <p className="mt-0.5 text-[11px] text-slate-400">描述你的公司和产品，或上传资料文件；助手会搭建客服技能并向你提问</p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <StatusChip detail={detail} />
+          <button
+            className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs ${
+              showFiles ? "bg-orange-50 text-[#FF5000]" : "text-slate-500 hover:bg-slate-100"
+            }`}
+            title={showFiles ? "收起文件工作台" : "打开文件工作台"}
+            onClick={() => setPanelOpen(!showFiles)}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+            </svg>
+            文件
+          </button>
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
+        {!showFiles && messages.length === 0 && (
+          <div className="flex flex-col items-center pt-10 pb-6 text-center">
+            <LogoMark size={44} />
+            <p className="mt-4 text-xl font-semibold text-slate-800">来搭建你的 AI 客服吧</p>
+            <p className="mt-1.5 max-w-md text-sm leading-relaxed text-slate-400">
+              描述你的公司和产品，或者上传产品手册、价格表、FAQ 等资料——助手会自动搭建客服技能、向你确认缺口，完成后自动发布上线。
+            </p>
+          </div>
+        )}
+        {messages.map((m) => {
+          const isUser = m.role === "user";
+          const isSystem = m.role === "system";
+          const animate = !isUser && !isSystem && m.id === lastAssistantId;
+          return (
+            <div key={m.id} className={`msg-enter flex ${isUser ? "justify-end" : "justify-start"}`}>
+              <div className={isUser ? "bubble-user" : isSystem ? "bubble-system" : "bubble-ai !text-[13px]"}>
+                {isUser ? m.content : <TypewriterText text={m.content} enabled={animate} />}
+              </div>
+            </div>
+          );
+        })}
+        {busyRun && (
+          <div className="msg-enter flex justify-start">
+            <div className="bubble-ai flex items-center gap-1.5 !text-[13px] !text-slate-400">
+              正在分析草稿与资料
+              <span className="thinking-dot" />
+              <span className="thinking-dot" />
+              <span className="thinking-dot" />
+            </div>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      <div className="border-t border-slate-100 bg-slate-50/70 px-4 py-1.5">
+        <div className="flex items-center justify-between text-[11px]">
+          <span>
+            {detail?.active ? (
+              <>
+                <span className="font-semibold text-[#FF5000]">v{detail.active.version}</span> 运行中
+                {detail.draft?.readiness?.blockers && detail.draft.readiness.blockers.length > 0 ? (
+                  <span className="text-amber-600"> · 草稿有 {detail.draft.readiness.blockers.length} 项待补齐</span>
+                ) : (
+                  <span className="text-slate-400"> · 草稿就绪</span>
+                )}
+              </>
+            ) : (
+              <span className="text-slate-400">尚未发布 · 补齐关键信息后自动发布</span>
+            )}
+          </span>
+          <Link className="text-[#FF5000] hover:underline" to={`/services/${id}/test`}>
+            去测试 →
+          </Link>
+        </div>
+      </div>
+
+      <div className="border-t border-slate-100 px-3 pb-3 pt-2.5">
+        <Composer
+          placeholder="向配置助手描述需求，Enter 发送"
+          disabled={busyRun}
+          onSend={send}
+          attach={{ onFiles: upload, accept: ".md,.txt,.csv,.json,.pdf,.docx,.xlsx,.xls,.png,.jpg,.jpeg,.webp" }}
+          attachLabel="上传资料（存入 assets/raw）"
+        />
+      </div>
+    </div>
+  );
+
+  if (!showFiles) {
+    return <div className="flex h-[calc(100vh-150px)]">{chatPanel}</div>;
+  }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[240px_1fr_400px]">
+    <div className="grid gap-4 xl:grid-cols-[1fr_240px_1fr]">
+      {chatPanel}
+
       {/* ===== 资源管理器 ===== */}
-      <div className="card h-[calc(100vh-150px)] overflow-hidden border-slate-200 bg-[#fbfbfc]">
+      <div className="card h-[calc(100vh-150px)] min-w-0 overflow-hidden border-slate-200 bg-[#fbfbfc]">
         <Explorer serviceId={id} refreshKey={treeKey} activePath={activePath} onOpen={openFile} onUpload={upload} uploading={uploading} />
       </div>
 
       {/* ===== 编辑器 ===== */}
       <div className="card flex h-[calc(100vh-150px)] min-w-0 flex-col overflow-hidden">
-        {/* tab 栏 */}
         <div className="flex items-center gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50 px-2 pt-1.5">
           {tabs.length === 0 && <span className="px-3 py-2 text-xs text-slate-400">未打开文件</span>}
           {tabs.map((t) => {
@@ -206,7 +311,7 @@ function Workbench({ id }: { id: string }) {
             return (
               <div
                 key={t.path}
-                className={`group flex shrink-0 items-center gap-1.5 rounded-t-lg border border-b-0 px-3 py-1.5 text-xs ${
+                className={`flex shrink-0 items-center gap-1.5 rounded-t-lg border border-b-0 px-3 py-1.5 text-xs ${
                   active ? "border-slate-200 bg-white text-slate-800" : "border-transparent text-slate-500 hover:bg-slate-100"
                 }`}
               >
@@ -251,95 +356,13 @@ function Workbench({ id }: { id: string }) {
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 text-slate-300">
-            <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
+            <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
               <path d="M14 2v6h6M9 13h6M9 17h6" />
             </svg>
-            <p className="text-sm">点击左侧文件开始编辑</p>
-            <p className="text-xs">修改 SKILL.md 或 references 后，可在右侧让配置助手核对并发布新版本</p>
+            <p className="text-sm">点击中间文件列表开始编辑</p>
           </div>
         )}
-      </div>
-
-      {/* ===== 配置聊天 ===== */}
-      <div className="card flex h-[calc(100vh-150px)] flex-col overflow-hidden">
-        <div className="border-b border-slate-100 px-4 py-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-[15px] font-semibold text-slate-900">{detail?.name ?? "…"} · 配置助手</h2>
-            <StatusChip detail={detail} />
-          </div>
-          <p className="mt-0.5 text-[11px] leading-relaxed text-slate-400">{UPLOAD_HINT}</p>
-        </div>
-
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
-          <div className="msg-enter flex justify-start">
-            <div className="max-w-[92%] rounded-2xl rounded-bl-md border border-orange-100 bg-gradient-to-br from-orange-50 to-amber-50 px-3.5 py-2.5 text-[13px] leading-relaxed text-[#8a5a2e]">
-              👋 描述你要做的客服，或上传资料（自动存入 <code className="rounded bg-white/70 px-1 font-mono text-[11px]">assets/raw/</code>）。我会阅读后向你提问，文件改动我可以核对并发布。
-            </div>
-          </div>
-          {messages.map((m) => {
-            const isUser = m.role === "user";
-            const isSystem = m.role === "system";
-            const animate = !isUser && !isSystem && m.id === lastAssistantId;
-            return (
-              <div key={m.id} className={`msg-enter flex ${isUser ? "justify-end" : "justify-start"}`}>
-                <div className={isUser ? "bubble-user !max-w-[92%]" : isSystem ? "bubble-system" : "bubble-ai !max-w-[94%] !text-[13px]"}>
-                  {isUser ? m.content : <TypewriterText text={m.content} enabled={animate} />}
-                </div>
-              </div>
-            );
-          })}
-          {busyRun && (
-            <div className="msg-enter flex justify-start">
-              <div className="bubble-ai flex items-center gap-1.5 !max-w-[94%] !text-[13px] !text-slate-400">
-                正在分析草稿与资料
-                <span className="thinking-dot" />
-                <span className="thinking-dot" />
-                <span className="thinking-dot" />
-              </div>
-            </div>
-          )}
-          <div ref={bottomRef} />
-        </div>
-
-        {/* 状态条 */}
-        <div className="border-t border-slate-100 bg-slate-50/70 px-4 py-2">
-          <div className="flex items-center justify-between text-[11px]">
-            <span>
-              {detail?.active ? (
-                <>
-                  <span className="font-semibold text-[#FF5000]">v{detail.active.version}</span> 运行中
-                  {detail.draft?.readiness?.blockers && detail.draft.readiness.blockers.length > 0 ? (
-                    <span className="text-amber-600"> · 草稿有 {detail.draft.readiness.blockers.length} 项待补齐</span>
-                  ) : (
-                    <span className="text-slate-400"> · 草稿就绪</span>
-                  )}
-                </>
-              ) : (
-                <span className="text-slate-400">尚未发布 · 补齐关键信息后自动发布</span>
-              )}
-            </span>
-            <Link className="text-[#FF5000] hover:underline" to={`/services/${id}/test`}>
-              去测试 →
-            </Link>
-          </div>
-          {detail?.draft?.readiness?.blockers && detail.draft.readiness.blockers.length > 0 && showGuidesNote && (
-            <ul className="mt-1 list-disc pl-4 text-[11px] text-amber-700">
-              {detail.draft.readiness.blockers.slice(0, 2).map((b, i) => (
-                <li key={i}>{b}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="border-t border-slate-100 px-3 pb-3 pt-2.5">
-          <Composer
-            placeholder="向配置助手描述需求…"
-            disabled={busyRun}
-            onSend={send}
-            sendLabel="Enter 发送"
-          />
-        </div>
       </div>
     </div>
   );

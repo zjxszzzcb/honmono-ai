@@ -32,6 +32,16 @@ function TestInner({ id }: { id: string }) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [bubbles.length, events.length, streamTarget?.text.length]);
 
+  const upload = async (list: FileList) => {
+    const form = new FormData();
+    for (const f of Array.from(list)) form.append("files", f);
+    const res = await fetch(`/api/customer-services/${id}/files`, { method: "POST", body: form, credentials: "include" });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      alert((body as { message?: string }).message ?? "上传失败");
+    }
+  };
+
   const send = async (content: string) => {
     if (running) return;
     setRunning(true);
@@ -176,7 +186,14 @@ function TestInner({ id }: { id: string }) {
           </div>
         )}
         <div className="border-t border-slate-100 px-4 pb-4 pt-3">
-          <Composer placeholder="以玩家身份输入消息…" disabled={running} onSend={send} sendLabel="Enter 发送" />
+          <Composer
+            placeholder="以玩家身份输入消息…"
+            disabled={running}
+            onSend={send}
+            sendLabel="Enter 发送"
+            attach={{ onFiles: upload }}
+            attachLabel="上传到草稿"
+          />
         </div>
       </div>
 

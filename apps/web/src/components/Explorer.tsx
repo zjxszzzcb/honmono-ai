@@ -62,13 +62,20 @@ export function Explorer({
 }) {
   const [tree, setTree] = useState<{ root: string; files: TreeNode[] } | null>(null);
   const [error, setError] = useState("");
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set(["_guides"]));
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let alive = true;
     api<{ root: string; files: TreeNode[] }>(`/api/customer-services/${serviceId}/files/tree`)
       .then((t) => {
-        if (alive) setTree(t);
+        if (!alive) return;
+        setTree(t);
+        // 默认所有目录折叠，只露出根文件（SKILL.md 等）
+        setCollapsed((prev) => {
+          if (prev.size > 0) return prev;
+          const dirs = t.files.filter((f) => f.dir).map((f) => f.path);
+          return new Set(dirs);
+        });
       })
       .catch((e) => {
         if (alive) setError(e instanceof Error ? e.message : "加载失败");
