@@ -2,6 +2,7 @@ import { AIMessage, HumanMessage, type BaseMessageLike } from "@langchain/core/m
 import type { Callbacks } from "@langchain/core/callbacks/manager";
 import type { BaseLanguageModel } from "@langchain/core/language_models/base";
 import { createDeepAgent, createFilesystemMiddleware, FilesystemBackend } from "deepagents";
+import { createMiddleware } from "langchain";
 import { createSignalTools, createConfigCapabilityTools, type AgentEvent, type ResponseOutcome } from "./tools.js";
 import { WEB_TOOL_RULES } from "./websearch.js";
 import { ensureHarnessProfile, RESPONSE_NUDGE } from "./langfuse.js";
@@ -9,6 +10,30 @@ import { ensureHarnessProfile, RESPONSE_NUDGE } from "./langfuse.js";
 export type { AgentEvent, ResponseOutcome };
 
 export type ChatTurn = { role: "user" | "assistant"; content: string };
+
+export class RunInterruptedError extends Error {
+  constructor(message = "已根据用户的新输入中断") {
+    super(message);
+    this.name = "RunInterruptedError";
+  }
+}
+
+/** 打断面：每次模型调用 / 工具调用后检查；命中即抛出，放弃本次运行 */
+function createInterruptMiddleware(checkInterrupt?: () => Promise<boolean>) {
+  if (!checkInterrupt) return null;
+  return createMiddleware({
+    name: "HonmonoInterrupt",
+    wrapModelCall: async (req, next) => {
+      if (await checkInterrupt()) throw new RunInterruptedError();
+      return next(req);
+    },
+    wrapToolCall: async (req, next) => {
+      const res = await next(req);
+      if (await checkInterrupt()) throw new RunInterruptedError();
+      return res;
+    },
+  });
+}
 
 const RUNTIME_STYLE_RULES = `
 ## 回复风格（必须遵守）
@@ -38,6 +63,17 @@ const CONFIG_STYLE_RULES = `
 - 达到最低就绪条件时先调用 validate_skill，通过后调用 publish_skill，再用 response 告知商户客服已可用。
 - 所有写入仅限当前草稿目录；不得编造商户没有提供的事实，未知项明确写 unknown。
 - 语气自然友好，像一位帮忙搭客服的产品顾问，不要用问卷腔。
+
+## 自主研究（重要）
+- 商户提供了可自查的线索（官网、产品名、公司名）时，主动用 web_search / web_fetch 自行取证，不要什么都等商户喂。
+- 自主研究结论写入 references/research-notes.md：每条注明来源 URL、抓取时间、置信度（高/中/低）；与商户口述冲突时以商户为准并在回复中指出。
+- 尚不能确认、需要商户拍板的事项记入 references/open-questions.md（待人工二次确认清单），逐条带背景与建议默认值。
+- 商户的新输入到达时会中断你的当前工作并由新一轮接手：保持每轮写入原子、完整，随时可被打断。
+
+## 提问方式
+- 可以归纳为明确选项的问题（类别、模式、受众等）用 ask_user 工具发出（每次 1-3 题，每题 2-6 个选项，选项要互斥且具体）。
+- 开放式、需要描述的问题直接写在 response 的 text 里问。
+- 两者不要在同一轮重复问同一件事；优先 ask_user，能减少商户打字负担。
 `;
 
 export type RuntimeAgentDeps = {
@@ -51,6 +87,8 @@ export type RuntimeAgentDeps = {
   recursionLimit?: number;
   /** 额外工具（如 web_search / web_fetch）；提供时会自动附加联网使用规范 */
   extraTools?: import("@langchain/core/tools").StructuredToolInterface[];
+  /** 返回 true 表示用户已发来新输入，应立即中断本次运行 */
+  checkInterrupt?: () => Promise<boolean>;
 };
 
 /** 运行时 Agent：只读文件工具 + response + ask_human */
@@ -59,12 +97,15 @@ export async function runRuntimeAgent(deps: RuntimeAgentDeps): Promise<ResponseO
   const signal = { outcome: null as ResponseOutcome | null };
   const { responseTool, askHumanTool } = createSignalTools(signal, deps.onEvent);
   const backend = new FilesystemBackend({ rootDir: deps.skillRootDir, virtualMode: true });
+  const interruptMw = createInterruptMiddleware(deps.checkInterrupt);
   const agent = createDeepAgent({
     model: deps.model,
     systemPrompt: composeRuntimeSystemPrompt(deps.skillMarkdown) + (deps.extraTools?.length ? WEB_TOOL_RULES : ""),
     backend,
     tools: deps.extraTools?.length ? [responseTool, askHumanTool, ...deps.extraTools] : [responseTool, askHumanTool],
-    middleware: [createFilesystemMiddleware({ backend, tools: ["ls", "read_file", "glob", "grep"] })],
+    middleware: interruptMw
+      ? [createFilesystemMiddleware({ backend, tools: ["ls", "read_file", "glob", "grep"] }), interruptMw]
+      : [createFilesystemMiddleware({ backend, tools: ["ls", "read_file", "glob", "grep"] })],
   });
 
   let messages: BaseMessageLike[] = deps.chatMessages.map((m) =>
@@ -136,27 +177,37 @@ export type ConfigAgentDeps = {
   onEvent?: (e: AgentEvent) => void;
   callbacks?: Callbacks;
   recursionLimit?: number;
+  /** 额外工具（web_search / web_fetch），提供时附加联网研究规范 */
+  extraTools?: import("@langchain/core/tools").StructuredToolInterface[];
+  /** 返回 true 表示用户已发来新输入，应立即中断本次运行 */
+  checkInterrupt?: () => Promise<boolean>;
 };
 
 /** 配置 Agent：读写草稿 + validate/publish + response */
-export async function runConfigAgent(deps: ConfigAgentDeps): Promise<{ reply: string }> {
+export type ConfigRunResult = { reply: string; askUser: { intro: string; questions: { question: string; options: string[] }[] } | null };
+
+export async function runConfigAgent(deps: ConfigAgentDeps): Promise<ConfigRunResult> {
   ensureHarnessProfile(deps.modelKey);
   const signal = { outcome: null as ResponseOutcome | null };
-  const { responseTool } = createSignalTools(signal, deps.onEvent);
+  const { responseTool, askUserTool } = createSignalTools(signal, deps.onEvent);
   const { validateTool, publishTool } = createConfigCapabilityTools({
     onValidate: deps.onValidate,
     onPublish: deps.onPublish,
     onEvent: deps.onEvent,
   });
   const backend = new FilesystemBackend({ rootDir: deps.draftRootDir, virtualMode: true });
+  const interruptMw = createInterruptMiddleware(deps.checkInterrupt);
   const agent = createDeepAgent({
     model: deps.model,
-    systemPrompt: `${deps.instructionMarkdown.trim()}\n${CONFIG_STYLE_RULES}`,
+    systemPrompt:
+      `${deps.instructionMarkdown.trim()}\n${CONFIG_STYLE_RULES}` + (deps.extraTools?.length ? WEB_TOOL_RULES : ""),
     backend,
-    tools: [responseTool, validateTool, publishTool],
-    middleware: [
-      createFilesystemMiddleware({ backend, tools: ["ls", "read_file", "glob", "grep", "write_file", "edit_file"] }),
-    ],
+    tools: deps.extraTools?.length
+      ? [responseTool, askUserTool, validateTool, publishTool, ...deps.extraTools]
+      : [responseTool, askUserTool, validateTool, publishTool],
+    middleware: interruptMw
+      ? [createFilesystemMiddleware({ backend, tools: ["ls", "read_file", "glob", "grep", "write_file", "edit_file"] }), interruptMw]
+      : [createFilesystemMiddleware({ backend, tools: ["ls", "read_file", "glob", "grep", "write_file", "edit_file"] })],
   });
 
   let messages: BaseMessageLike[] = deps.chatMessages.map((m) =>
@@ -172,13 +223,16 @@ export async function runConfigAgent(deps: ConfigAgentDeps): Promise<{ reply: st
     );
     const outcome = signal.outcome as ResponseOutcome | null;
     if (outcome?.kind === "response") {
-      return { reply: outcome.text };
+      return { reply: outcome.text, askUser: null };
+    }
+    if (outcome?.kind === "ask_user") {
+      return { reply: "", askUser: { intro: outcome.intro, questions: outcome.questions } };
     }
     if (outcome?.kind === "ask_human") {
       // 配置 Agent 不应请求人工；把问题转述给商户
-      return { reply: outcome.question };
+      return { reply: outcome.question, askUser: null };
     }
     messages = nudgeWithLastText(messages);
   }
-  throw new ResponseContractError("配置模型多次未通过 response 工具输出");
+  throw new ResponseContractError("配置模型多次未通过 response / ask_user 工具输出");
 }

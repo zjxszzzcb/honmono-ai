@@ -12,8 +12,9 @@ import {
   uploads,
   appendMessage,
   createRunIdempotent,
-  getOrCreateConversation,
   getActiveRun,
+  transitionRun,
+  getOrCreateConversation,
   getRunById,
   listMessages,
   getMerchant,
@@ -27,7 +28,7 @@ import {
   HandoffReplyInput,
   CreateServiceInput,
 } from "@honmono/contracts";
-import { getQueue } from "../queues.js";
+import { getQueue, redisConnection } from "../queues.js";
 import { runTestPlayground } from "../test-playground.js";
 import type { AppEnv } from "../env.js";
 
@@ -128,6 +129,18 @@ serviceRoutes.post("/:id/config/messages", async (c) => {
   if (service.status === "disabled") return c.json({ error: "service_disabled", message: "客服已停用" }, 409);
   const body = ConfigMessageInput.parse(await c.req.json());
   const conv = await getOrCreateConversation(service.id, "config", null);
+
+  // codex 式打断：配置 Agent 正在工作中时，新输入立即中断当前 Run，由新一轮（含全部历史）接手
+  const activeRun = await getActiveRun(conv.id);
+  if (activeRun && activeRun.kind === "configuration" && ["queued", "running"].includes(activeRun.state)) {
+    await redisConnection.set(`interrupt:run:${activeRun.id}`, "1", "EX", 300).catch(() => {});
+    await transitionRun(activeRun.id, activeRun.state, {
+      state: "interrupted",
+      errorCode: "interrupted_by_new_input",
+      finishedAt: new Date(),
+    }).catch(() => {});
+  }
+
   const { run, created } = await createRunIdempotent({
     requestId: crypto.randomUUID(),
     serviceId: service.id,

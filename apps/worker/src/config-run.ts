@@ -1,4 +1,5 @@
 import { and, desc, eq, sql } from "drizzle-orm";
+import { eq as eqOp } from "drizzle-orm";
 import {
   appendMessage,
   conversations,
@@ -14,13 +15,33 @@ import {
   ModelNotConfiguredError,
 } from "@honmono/db";
 import * as storage from "@honmono/storage";
-import { createChatModel, createRunTracer, runConfigAgent, type ChatTurn } from "@honmono/agent";
+import { createChatModel, createRunTracer, runConfigAgent, RunInterruptedError, type ChatTurn } from "@honmono/agent";
+import { Redis } from "ioredis";
+import { buildWebToolsIfConfigured } from "./agent-executor.js";
 // @ts-expect-error — 纯 mjs 校验脚本（确定性校验，无类型声明）
 import { validateSkillDir } from "../../../skills/create-customer-service/scripts/validate-skill.mjs";
+
+const interruptRedis = new Redis(process.env.REDIS_URL ?? "redis://localhost:6380", { lazyConnect: true, maxRetriesPerRequest: null });
 
 export async function executeConfigRun(runId: string): Promise<void> {
   const run = await getRunById(runId);
   if (!run || run.state !== "queued") return;
+
+  // 打断面：API 在用户插话时 SET interrupt:{runId}=1；同时 run 状态离开 running 也视为被打断
+  const checkInterrupt = async (): Promise<boolean> => {
+    try {
+      const flagged = await interruptRedis.get(`interrupt:run:${runId}`);
+      if (flagged === "1") return true;
+    } catch {
+      /* Redis 不可用时退化为仅状态检查 */
+    }
+    try {
+      const fresh = await getRunById(runId);
+      return !fresh || fresh.state !== "running";
+    } catch {
+      return false;
+    }
+  };
 
   const service = (await db.select().from(customerServices).where(eq(customerServices.id, run.serviceId)).limit(1))[0];
   if (!service || service.status === "deleted") {
@@ -97,6 +118,8 @@ export async function executeConfigRun(runId: string): Promise<void> {
       return { ok: true as const, version: result.version, message: `已发布 v${result.version}` };
     };
 
+    const extraTools = await buildWebToolsIfConfigured();
+
     const tracer = await createRunTracer({
       traceName: "configuration.run",
       traceId: run.id,
@@ -121,7 +144,7 @@ export async function executeConfigRun(runId: string): Promise<void> {
 
     const instruction = await loadCreateCustomerServiceSkill();
 
-    const { reply } = await runConfigAgent({
+    const { reply, askUser } = await runConfigAgent({
       model: createChatModel(resolved),
       modelKey: resolved.modelKey,
       draftRootDir: draftRootAbs,
@@ -129,34 +152,66 @@ export async function executeConfigRun(runId: string): Promise<void> {
       chatMessages: chatTurns,
       onValidate: doValidate,
       onPublish: doPublish,
+      extraTools,
+      checkInterrupt,
       callbacks: (tracer ? [tracer.handler] : []) as unknown as undefined,
     });
 
-    await appendMessage({
-      conversationId: conv.id,
-      serviceId: service.id,
-      role: "assistant",
-      authorType: "ai",
-      content: reply,
-      runId: run.id,
-    });
-    await transitionRun(runId, "running", {
-      state: "succeeded",
-      finishedAt: new Date(),
-      modelKey: resolved.modelKey,
-      providerConfigVersion: resolved.configVersion,
-      skillVersionId: draftVersion.id,
-      resultJson: { reply },
-    });
+    if (askUser) {
+      // 结构化选择题：内容存 JSON，前端渲染为选项卡片
+      await appendMessage({
+        conversationId: conv.id,
+        serviceId: service.id,
+        role: "assistant",
+        authorType: "ai",
+        content: JSON.stringify({ __honmono: "ask_user", intro: askUser.intro, questions: askUser.questions }),
+        runId: run.id,
+      });
+      await transitionRun(runId, "running", {
+        state: "succeeded",
+        finishedAt: new Date(),
+        modelKey: resolved.modelKey,
+        providerConfigVersion: resolved.configVersion,
+        skillVersionId: draftVersion.id,
+        resultJson: { ask_user: askUser },
+      });
+    } else {
+      await appendMessage({
+        conversationId: conv.id,
+        serviceId: service.id,
+        role: "assistant",
+        authorType: "ai",
+        content: reply,
+        runId: run.id,
+      });
+      await transitionRun(runId, "running", {
+        state: "succeeded",
+        finishedAt: new Date(),
+        modelKey: resolved.modelKey,
+        providerConfigVersion: resolved.configVersion,
+        skillVersionId: draftVersion.id,
+        resultJson: { reply },
+      });
+    }
     await tracer?.flush();
   } catch (err) {
-    const code = err instanceof ModelNotConfiguredError ? "model_not_configured" : "config_agent_failed";
-    await transitionRun(runId, "running", {
+    if (err instanceof RunInterruptedError) {
+      // 被新输入打断：静默标记，让新一轮接手（不打扰商户）
+      await transitionRun(runId, "running", {
+        state: "interrupted",
+        errorCode: "interrupted_by_new_input",
+        finishedAt: new Date(),
+      }).catch(() => {});
+      return;
+    }
+    // 状态已被外部接管（如打断）则静默退出，不打扰商户
+    const moved = await transitionRun(runId, "running", {
       state: "failed",
-      errorCode: code,
+      errorCode: err instanceof ModelNotConfiguredError ? "model_not_configured" : "config_agent_failed",
       errorMessage: err instanceof Error ? err.message : String(err),
       finishedAt: new Date(),
     });
+    if (!moved) return;
     // 给商户一个可见的错误提示
     await appendMessage({
       conversationId: conv.id,

@@ -17,6 +17,90 @@ type ServiceDetail = {
 };
 
 type EditorTab = { path: string; content: string; saved: string; loading: boolean };
+type AskUserPayload = { __honmono: "ask_user"; intro: string; questions: { question: string; options: string[] }[] };
+
+function parseAskUser(content: string): AskUserPayload | null {
+  if (!content.startsWith("{")) return null;
+  try {
+    const d = JSON.parse(content);
+    if (d?.__honmono === "ask_user" && Array.isArray(d.questions) && d.questions.length > 0) return d;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** 结构化选择题卡片：点选 + 可选补充说明，提交后作为普通用户消息进入对话 */
+function AskUserCard({
+  payload,
+  answered,
+  onSubmit,
+}: {
+  payload: AskUserPayload;
+  answered: boolean;
+  onSubmit: (text: string) => void;
+}) {
+  const [picked, setPicked] = useState<Record<number, string>>({});
+  const [extra, setExtra] = useState("");
+  const allPicked = payload.questions.every((_, i) => picked[i]);
+
+  const submit = () => {
+    const lines = payload.questions.map((q, i) => `${i + 1}. ${q.question}：${picked[i] ?? ""}`);
+    if (extra.trim()) lines.push(`补充：${extra.trim()}`);
+    onSubmit(lines.join("\n"));
+  };
+
+  return (
+    <div className="w-full max-w-[94%] rounded-2xl border border-orange-200 bg-gradient-to-br from-orange-50/90 to-amber-50/70 p-4">
+      <p className="text-[13px] font-medium text-[#9a5b2d]">{payload.intro}</p>
+      <div className="mt-3 space-y-3.5">
+        {payload.questions.map((q, qi) => (
+          <div key={qi}>
+            <p className="mb-1.5 text-[13px] font-medium text-slate-700">
+              {qi + 1}. {q.question}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {q.options.map((opt) => {
+                const sel = picked[qi] === opt;
+                return (
+                  <button
+                    key={opt}
+                    disabled={answered}
+                    onClick={() => setPicked((p) => ({ ...p, [qi]: opt }))}
+                    className={`rounded-full border px-3 py-1.5 text-[12.5px] transition-colors ${
+                      sel
+                        ? "border-[#FF5000] bg-[#FF5000] text-white shadow-sm"
+                        : answered
+                          ? "border-slate-200 bg-slate-50 text-slate-400"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-orange-300 hover:text-[#FF5000]"
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+      {answered ? (
+        <p className="mt-3 text-[11px] text-slate-400">已回答 ✓</p>
+      ) : (
+        <>
+          <input
+            className="input mt-3 !rounded-full text-[12.5px]"
+            placeholder="其他补充说明（可留空）"
+            value={extra}
+            onChange={(e) => setExtra(e.target.value)}
+          />
+          <button className="btn-primary mt-2.5 w-full !py-1.5 text-[12.5px]" onClick={submit} disabled={!allPicked}>
+            {allPicked ? "提交回答" : "请先完成所有选择"}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
 
 export function Configure() {
   const { id } = useParams<{ id: string }>();
@@ -232,12 +316,18 @@ function Workbench({ id }: { id: string }) {
         {messages.map((m) => {
           const isUser = m.role === "user";
           const isSystem = m.role === "system";
-          const animate = !isUser && !isSystem && m.id === lastAssistantId;
+          const askUser = !isUser && !isSystem ? parseAskUser(m.content) : null;
+          const answered = isUser ? false : messages.some((x) => x.role === "user" && x.id > m.id);
+          const animate = !isUser && !isSystem && !askUser && m.id === lastAssistantId;
           return (
             <div key={m.id} className={`msg-enter flex ${isUser ? "justify-end" : "justify-start"}`}>
-              <div className={isUser ? "bubble-user" : isSystem ? "bubble-system" : "bubble-ai !text-[13px]"}>
-                {isUser ? m.content : <TypewriterText text={m.content} enabled={animate} />}
-              </div>
+              {askUser ? (
+                <AskUserCard payload={askUser} answered={answered} onSubmit={send} />
+              ) : (
+                <div className={isUser ? "bubble-user" : isSystem ? "bubble-system" : "bubble-ai !text-[13px]"}>
+                  {isUser ? m.content : <TypewriterText text={m.content} enabled={animate} />}
+                </div>
+              )}
             </div>
           );
         })}
@@ -270,9 +360,11 @@ function Workbench({ id }: { id: string }) {
               <span className="text-slate-400">尚未发布 · 补齐关键信息后自动发布</span>
             )}
           </span>
-          <Link className="text-[#FF5000] hover:underline" to={`/services/${id}/test`}>
-            去测试 →
-          </Link>
+          {detail?.active && (
+            <Link className="text-[#FF5000] hover:underline" to={`/services/${id}/test`}>
+              去测试 →
+            </Link>
+          )}
         </div>
       </div>
 

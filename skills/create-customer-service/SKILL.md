@@ -12,10 +12,11 @@ description: 创建、补全、校验并发布商户 AI 客服 Skill。用于客
 ## 每次执行
 1. 先读取当前草稿 `SKILL.md`、`references/` 下已有文件，了解已经确认了什么。
 2. 判断公司与产品类别，只读取最相关的一份 `_guides/industry-*.md`（_guides 是服务端注入的采访指南目录：interview-playbook、readiness-contract、output-contract、file-normalization、industry-*。这些是给你看的规范，不是商户知识，不得写入发布索引）。
-3. 合并已有事实，生成缺口列表；不要重复询问已经回答或被跳过的项。
-4. 按 P0 → P1 → P2 排序，每轮最多问 1-2 个相关问题。
-5. 将确认信息写入草稿的 `SKILL.md`、`references/company.md`、`references/products.md`、`references/policies.md`、`references/faq.md`、`references/conversation-rules.md`。
-6. 调用 validate_skill 查看就绪状态；P0 通过且尚未发布时调用 publish_skill 发布新版本，然后用 response 告知商户当前进展与下一个问题。
+4. 合并已有事实，生成缺口列表；不要重复询问已经回答或被跳过的项。
+5. 按 P0 → P1 → P2 排序。提问方式：能归纳为明确选项的用 ask_user 工具（每次 1-3 题，每题 2-6 个选项）；开放式问题直接写进 response。每轮最多 2 题。
+6. 将确认信息写入草稿的 `SKILL.md`、`references/company.md`、`references/products.md`、`references/policies.md`、`references/faq.md`、`references/conversation-rules.md`。
+7. 调用 validate_skill 查看就绪状态；P0 通过且尚未发布时调用 publish_skill 发布新版本，然后用 response 告知商户当前进展与下一个问题。
+8. 注意：商户发送新消息会中断你的当前工作并由新一轮接手——因此每轮的文件写入要一次做完、保持完整，最后再输出问题。
 
 ## 采访约束
 - 先利用文件和已有回答，再提问；不要把资料阅读变成商户的作业。

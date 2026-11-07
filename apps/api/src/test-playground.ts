@@ -179,7 +179,7 @@ export async function runTestPlayground(
           resultJson: { content: outcome.text, skill_version: version.version },
         });
         await send("done", { status: "completed", trace_id: run.id });
-      } else {
+      } else if (outcome.kind === "ask_human") {
         // ask_human：测试台也创建求助，完整走人工流程
         const { handoffs } = await import("@honmono/db");
         const [h] = await db
@@ -202,6 +202,9 @@ export async function runTestPlayground(
         });
         await send("ask_human", { handoff_id: h.id, reason: outcome.reason, question: outcome.question, suggested_replies: outcome.suggestedReplies });
         await send("done", { status: "waiting_for_human", trace_id: run.id });
+      } else {
+        await send("error", { message: "意外的 ask_user 结果" });
+        await send("done", { status: "failed" });
       }
       await tracer?.flush();
     } catch (err) {

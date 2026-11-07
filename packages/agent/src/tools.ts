@@ -5,9 +5,12 @@ export type AgentEvent =
   | { type: "tool.started"; name: string; summary: string }
   | { type: "tool.finished"; name: string; ok: boolean };
 
+export type AskUserQuestion = { question: string; options: string[] };
+
 export type ResponseOutcome =
   | { kind: "response"; text: string; sleepSeconds: number; degraded?: boolean }
-  | { kind: "ask_human"; reason: string; question: string; contextSummary: string; suggestedReplies: string[] };
+  | { kind: "ask_human"; reason: string; question: string; contextSummary: string; suggestedReplies: string[] }
+  | { kind: "ask_user"; intro: string; questions: AskUserQuestion[] };
 
 export type Signal = { outcome: ResponseOutcome | null };
 
@@ -72,7 +75,43 @@ export function createSignalTools(signal: Signal, onEvent?: (e: AgentEvent) => v
     },
   );
 
-  return { responseTool, askHumanTool };
+  const askUserTool = tool(
+    async ({ intro, questions }) => {
+      if (signal.outcome) {
+        return "错误：本次运行已生成过回复或求助，不能再调用 ask_user。";
+      }
+      const cleaned = questions
+        .map((q) => ({ question: q.question.trim(), options: q.options.map((o) => o.trim()).filter(Boolean).slice(0, 6) }))
+        .filter((q) => q.question && q.options.length >= 2)
+        .slice(0, 3);
+      if (cleaned.length === 0) {
+        return "错误：ask_user 至少需要 1 个问题且每题 2 个以上选项；描述类问题请不要用本工具。";
+      }
+      onEvent?.({ type: "tool.started", name: "ask_user", summary: `${cleaned.length} 个选择题` });
+      signal.outcome = { kind: "ask_user", intro: intro.trim(), questions: cleaned };
+      onEvent?.({ type: "tool.finished", name: "ask_user", ok: true });
+      return "ok：选择题已提交给用户，本次运行结束，等待用户点选回答。";
+    },
+    {
+      name: "ask_user",
+      description:
+        "向用户提出选择题（面向结构化确认）。仅当问题可以归纳为明确的选项时使用（如：业务类别、目标用户、套餐模式）。每次 1-3 题，每题 2-6 个选项；开放式/描述类问题直接写在 response 里问，不要用本工具。",
+      schema: z.object({
+        intro: z.string().min(1).max(300).describe("一句话说明为什么问这些"),
+        questions: z
+          .array(
+            z.object({
+              question: z.string().min(1).max(200).describe("问题本身"),
+              options: z.array(z.string().min(1).max(120)).min(2).max(6).describe("候选项"),
+            }),
+          )
+          .min(1)
+          .max(3),
+      }),
+    },
+  );
+
+  return { responseTool, askHumanTool, askUserTool };
 }
 
 /**

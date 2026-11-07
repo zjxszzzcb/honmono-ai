@@ -26,3 +26,5 @@ description: 初始客服技能模板：由配置 Agent 持续补全后发布。
 - references/faq.md — 已确认问答
 - references/conversation-rules.md — 服务边界与升级规则
 - references/source-index.md — 上传资料索引
+- references/research-notes.md — 联网调研结论与来源
+- references/open-questions.md — 待人工二次确认清单

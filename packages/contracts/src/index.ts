@@ -8,6 +8,7 @@ export const RunState = z.enum([
   "waiting_human",
   "succeeded",
   "superseded",
+  "interrupted",
   "failed",
 ]);
 export type RunState = z.infer<typeof RunState>;

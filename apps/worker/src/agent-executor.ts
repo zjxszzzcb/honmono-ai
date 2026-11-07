@@ -207,7 +207,16 @@ export async function executeChatAgent(input: {
     return { type: "completed", content: outcome.text, skillVersion: version.version };
   }
 
-  // ask_human
+  // ask_human（运行时 Agent 未绑定 ask_user，此处仅为类型收窄）
+  if (outcome.kind === "ask_user") {
+    await transitionRun(run.id, "running", {
+      state: "failed",
+      errorCode: "unexpected_ask_user",
+      errorMessage: "运行时 Agent 不应产生 ask_user",
+      finishedAt: new Date(),
+    });
+    return { type: "ignored", reason: "unexpected_ask_user" };
+  }
   const { handoffs } = await import("@honmono/db");
   const [h] = await db
     .insert(handoffs)
