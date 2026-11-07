@@ -115,6 +115,8 @@ export async function executeConfigRun(runId: string): Promise<void> {
           .where(eq(customerServices.id, service.id));
         return published;
       });
+      // 名称/描述仍是默认值时，用生成的 Skill 元信息自动替换（方便人类查看）
+      await autoFillNameAndDescription(service.id, service.name, service.description, newRootRel);
       return { ok: true as const, version: result.version, message: `已发布 v${result.version}` };
     };
 
@@ -220,6 +222,40 @@ export async function executeConfigRun(runId: string): Promise<void> {
       authorType: "system",
       content: "配置处理出现问题，请稍后重试；若持续出现请联系平台管理员。",
     }).catch(() => {});
+  }
+}
+
+/** 名称匹配默认模式（客服 01）且描述为空时，用 SKILL.md 标题与 frontmatter description 替换 */
+async function autoFillNameAndDescription(
+  serviceId: string,
+  currentName: string,
+  currentDescription: string | null,
+  versionRootRel: string,
+): Promise<void> {
+  try {
+    const isDefaultName = /^客服 \d{1,3}$/.test(currentName.trim());
+    const noDescription = !currentDescription || !currentDescription.trim();
+    if (!isDefaultName && !noDescription) return;
+    const skillMd = await storage.readText(`${versionRootRel}/SKILL.md`);
+    const fmName = skillMd.match(/^name:\s*(.+)$/m)?.[1]?.trim() ?? "";
+    const fmDescription = skillMd.match(/^description:\s*(.+)$/m)?.[1]?.trim() ?? "";
+    const heading = skillMd.match(/^#\s+(\S[^\n]*)$/m)?.[1]?.trim() ?? "";
+    // 名称：优先 SKILL.md 主标题（非通用词），其次 frontmatter name
+    const GENERIC_TITLES = new Set(["新客服", "service-skill", "客服"]);
+    let newName: string | null = null;
+    if (heading && !GENERIC_TITLES.has(heading) && heading.length <= 40) newName = heading;
+    else if (fmName && !GENERIC_TITLES.has(fmName) && fmName.length <= 64) newName = fmName;
+    const patch: Record<string, unknown> = { updatedAt: new Date() };
+    if (isDefaultName && newName) patch.name = newName.slice(0, 64);
+    if (noDescription && fmDescription) patch.description = fmDescription.slice(0, 500);
+    if (Object.keys(patch).length > 1) {
+      const { customerServices: cs } = await import("@honmono/db");
+      const { eq: eqOp } = await import("drizzle-orm");
+      await db.update(cs).set(patch).where(eqOp(cs.id, serviceId));
+      console.log(`[config] auto-filled service meta for ${serviceId}: name=${patch.name ?? "(kept)"} desc=${patch.description ? "yes" : "(kept)"}`);
+    }
+  } catch (err) {
+    console.warn("[config] auto-fill meta failed:", err instanceof Error ? err.message : err);
   }
 }
 
