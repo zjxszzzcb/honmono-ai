@@ -101,7 +101,7 @@ function TestInner({ id }: { id: string }) {
             setEvents((p) => [...p, { kind: "human", text: `转人工：${data.question}`, at: Date.now() }]);
             setBubbles((prev) => [
               ...prev,
-              { key: nextKey(), role: "system", content: `⏸ 已创建转人工（原因：${data.reason}）。可在「转人工」页处理。` },
+              { key: nextKey(), role: "system", content: `已创建转人工工单（原因：${data.reason}）。请在「人工接管台」处理。` },
             ]);
           } else if (event === "error") {
             setEvents((p) => [...p, { kind: "error", text: String(data.message ?? "错误"), at: Date.now() }]);
@@ -134,18 +134,18 @@ function TestInner({ id }: { id: string }) {
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
           <div>
             <h2 className="text-[17px] font-semibold text-slate-900">测试台</h2>
-            <p className="mt-0.5 text-xs text-slate-400">与生产 /chat 完全独立的测试会话</p>
+            <p className="mt-0.5 text-xs text-slate-400">与生产环境完全隔离的验证会话，共用同一 Agent 核心</p>
           </div>
           <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
             <input type="checkbox" checked={useDraft} onChange={(e) => setUseDraft(e.target.checked)} className="accent-[#FF5000]" />
-            使用草稿版本
+            使用草稿 Skill
           </label>
         </div>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
           {bubbles.length === 0 && !streamTarget && (
             <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3 text-sm text-slate-500">
-              以玩家身份发送消息试试，右侧会显示执行事件时间线。
+              发送消息模拟终端用户咨询；右侧时间线将实时展示 Agent 的执行过程。
             </div>
           )}
           {bubbles.map((b) => (
@@ -162,7 +162,7 @@ function TestInner({ id }: { id: string }) {
                   <TypewriterText text={streamTarget.text} enabled={true} />
                 ) : (
                   <span className="flex items-center gap-1.5 text-slate-400">
-                    AI 正在处理
+                    Agent 正在处理
                     <span className="thinking-dot" />
                     <span className="thinking-dot" />
                     <span className="thinking-dot" />
@@ -174,7 +174,7 @@ function TestInner({ id }: { id: string }) {
           {running && !streamTarget && (
             <div className="flex justify-start">
               <div className="bubble-ai flex items-center gap-1.5 !text-slate-400">
-                AI 正在处理
+                Agent 正在处理
                 <span className="thinking-dot" />
                 <span className="thinking-dot" />
                 <span className="thinking-dot" />
@@ -186,12 +186,12 @@ function TestInner({ id }: { id: string }) {
 
         {lastStatus === "waiting_for_human" && (
           <div className="border-t border-amber-100 bg-amber-50/80 px-6 py-2.5 text-xs text-amber-700">
-            本会话已转人工：可在「转人工」页选择建议回复或接管；处理后 AI 恢复自动应答。
+            会话已转人工。请在「人工接管台」选用建议回复或直接接管；处理完成后 AI 将恢复自动应答。
           </div>
         )}
         <div className="border-t border-slate-100 px-4 pb-4 pt-3">
           <Composer
-            placeholder="以玩家身份输入消息…"
+            placeholder="输入终端用户消息…"
             disabled={running}
             onSend={send}
             sendLabel="Enter 发送"

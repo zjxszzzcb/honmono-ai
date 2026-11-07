@@ -68,7 +68,7 @@ function DashboardInner() {
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50 text-2xl">🤖</div>
           <p className="mt-4 font-semibold text-slate-700">还没有客服 Agent</p>
           <p className="mt-1 max-w-sm text-sm text-slate-400">
-            一键创建后，用一段话描述你的业务，或上传产品资料，几分钟就能得到一个可上线接入的客服。
+            创建后用一段话描述业务，或上传产品资料，即可在几分钟内完成一个可接入生产的客服 Agent。
           </p>
           <button className="btn-primary mt-6" onClick={merchant?.activated ? create : () => nav("/activate")}>
             {merchant?.activated ? "创建第一个客服" : "先去激活权益"}
@@ -110,7 +110,7 @@ function ServiceCard({ svc, onEdit, onChanged }: { svc: Svc; onEdit: () => void;
             <span className={`badge ${statusCls}`}>{statusLabel}</span>
           </div>
           <p className={`mt-0.5 line-clamp-2 min-h-[2.4em] text-[13px] leading-relaxed ${svc.description ? "text-slate-500" : "text-slate-300"}`}>
-            {svc.description || "还没有描述，点击右上角 ✎ 补充一段，方便团队其他成员理解这个客服的用途。"}
+            {svc.description || "暂无描述。点击右上角编辑按钮补充，便于团队成员理解该 Agent 的职责范围。"}
           </p>
         </div>
         <button

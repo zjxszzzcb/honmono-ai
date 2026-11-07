@@ -39,7 +39,7 @@ function Center() {
         <div>
           <h1 className="text-2xl font-bold">人工接管台</h1>
           <p className="mt-1 text-sm text-slate-500">
-            AI 无法确认或客户要求人工时会转到这里：选用建议回复、编辑后发送，或直接接管会话，处理完交还 AI。
+            Agent 无法确认答案，或终端用户要求人工服务时，会话将移交至此。可选用建议回复、编辑后发送，或直接接管会话；处理完成后交还 AI。
           </p>
         </div>
         <div className="flex gap-1 rounded-xl bg-white p-1 shadow-sm">
@@ -66,7 +66,6 @@ function Center() {
       {loading && <div className="card p-10 text-center text-slate-400">加载中…</div>}
       {!loading && visible.length === 0 && (
         <div className="card p-12 text-center">
-          <p className="text-3xl">🌤️</p>
           <p className="mt-2 font-medium text-slate-600">{EMPTY_TITLE[tab]}</p>
           <p className="mt-1 text-sm text-slate-400">{EMPTY_DESC[tab]}</p>
         </div>
@@ -86,7 +85,7 @@ const EMPTY_TITLE: Record<string, string> = {
   closed: "还没有处理记录",
 };
 const EMPTY_DESC: Record<string, string> = {
-  pending: "AI 遇到不确定的问题时会自动转到这里，稍安勿躁～",
-  human_controlled: "接管会话后可以在这里继续人工回复。",
-  closed: "处理过的转人工请求会归档在这里。",
+  pending: "当 Agent 无法确认答案，或终端用户要求人工服务时，工单将出现在这里。",
+  human_controlled: "接管期间可在此继续以人工身份回复。",
+  closed: "已处理的工单将在此归档，供追溯与质检。",
 };

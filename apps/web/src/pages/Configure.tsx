@@ -307,9 +307,9 @@ function Workbench({ id }: { id: string }) {
         {!showFiles && messages.length === 0 && (
           <div className="flex flex-col items-center pt-10 pb-6 text-center">
             <LogoMark size={44} />
-            <p className="mt-4 text-xl font-semibold text-slate-800">来搭建你的 AI 客服吧</p>
+            <p className="mt-4 text-xl font-semibold text-slate-800">配置你的 AI 客服 Agent</p>
             <p className="mt-1.5 max-w-md text-sm leading-relaxed text-slate-400">
-              描述你的公司和产品，或者上传产品手册、价格表、FAQ 等资料——助手会自动搭建客服技能、向你确认缺口，完成后自动发布上线。
+              描述你的业务与产品，或上传相关资料。配置助手将据此构建客服 Skill、确认关键缺口，并在就绪后自动发布。
             </p>
           </div>
         )}
@@ -334,7 +334,7 @@ function Workbench({ id }: { id: string }) {
         {busyRun && (
           <div className="msg-enter flex justify-start">
             <div className="bubble-ai flex items-center gap-1.5 !text-[13px] !text-slate-400">
-              正在分析草稿与资料
+              配置助手正在分析资料与草稿
               <span className="thinking-dot" />
               <span className="thinking-dot" />
               <span className="thinking-dot" />
@@ -362,7 +362,7 @@ function Workbench({ id }: { id: string }) {
           </span>
           {detail?.active && (
             <Link className="text-[#FF5000] hover:underline" to={`/services/${id}/test`}>
-              去测试 →
+              打开测试台 →
             </Link>
           )}
         </div>
@@ -374,7 +374,7 @@ function Workbench({ id }: { id: string }) {
           disabled={busyRun}
           onSend={send}
           attach={{ onFiles: upload, accept: ".md,.txt,.csv,.json,.pdf,.docx,.xlsx,.xls,.png,.jpg,.jpeg,.webp" }}
-          attachLabel="上传资料"
+          attachLabel="上传资料文件"
         />
       </div>
     </div>
