@@ -163,6 +163,8 @@ function parseRemaining(headers: Headers, candidates: string[]): number | null {
 }
 
 // ============ WebFetch（带 SSRF 防护）============
+// SSRF 拦截清单：私网/环回/链路本地/云元数据端点。
+// 注意：这是尽力而为的应用层防护，不是安全边界——部署时必须在网络层限制出网范围（见 README 安全警告）。
 const BLOCKED_HOST_PATTERNS = [
   /^localhost$/i,
   /\.local$/i,
@@ -173,10 +175,17 @@ const BLOCKED_HOST_PATTERNS = [
   /^192\.168\./,
   /^172\.(1[6-9]|2\d|3[01])\./,
   /^169\.254\./,
+  /^100\.100\./, // 阿里云等云内部端点（如 100.100.100.200 元数据）
   /^\[?::1\]?$/,
+  /^\[?::ffff:127\./i, // IPv4-mapped IPv6
+  /^\[?::ffff:10\./i,
+  /^\[?::ffff:192\.168\./i,
+  /^\[?::ffff:172\.(1[6-9]|2\d|3[01])\./i,
+  /^\[?::ffff:169\.254\./i,
   /^\[?fe80:/i,
   /^\[?fc00:/i,
   /^\[?fd/i,
+  /^metadata\./i, // metadata.google.internal 等
 ];
 
 async function assertPublicHost(hostname: string): Promise<void> {
@@ -187,13 +196,15 @@ async function assertPublicHost(hostname: string): Promise<void> {
   const addrs = await dns.lookup(hostname, { all: true }).catch(() => null);
   if (!addrs || addrs.length === 0) throw new Error("域名无法解析");
   for (const a of addrs) {
-    const ip = a.address;
+    const ip = a.address.replace(/^::ffff:/i, ""); // 归一化 IPv4-mapped IPv6
     if (
       /^127\./.test(ip) ||
       /^10\./.test(ip) ||
       /^192\.168\./.test(ip) ||
       /^172\.(1[6-9]|2\d|3[01])\./.test(ip) ||
       /^169\.254\./.test(ip) ||
+      /^100\.100\./.test(ip) ||
+      /^0\.0\.0\.0$/.test(ip) ||
       ip === "::1" ||
       /^f[cd]/i.test(ip)
     ) {
