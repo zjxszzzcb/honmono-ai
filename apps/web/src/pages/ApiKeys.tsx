@@ -37,7 +37,7 @@ function KeysInner({ id }: { id: string }) {
   };
 
   const revoke = async (keyId: string) => {
-    if (!confirm("确定吊销该 Key？使用它的调用会立即 401。")) return;
+    if (!confirm("确定删除该 Key？使用它的调用会立即失效（401）。")) return;
     await api(`/api/customer-services/${id}/api-keys/${keyId}`, { method: "DELETE" });
     load();
   };
@@ -91,11 +91,11 @@ function KeysInner({ id }: { id: string }) {
                 <td className="px-5 py-3 font-medium">{k.name}</td>
                 <td className="px-5 py-3 font-mono text-xs text-slate-500">{k.prefix}…</td>
                 <td className="px-5 py-3">
-                  {k.revoked ? <span className="badge bg-red-50 text-red-500">已吊销</span> : <span className="badge bg-green-50 text-green-600">有效</span>}
+                  {k.revoked ? <span className="badge bg-slate-100 text-slate-500">已删除</span> : <span className="badge bg-green-50 text-green-600">有效</span>}
                 </td>
                 <td className="px-5 py-3 text-slate-500">{k.last_used_at ? new Date(k.last_used_at).toLocaleString() : "—"}</td>
                 <td className="px-5 py-3 text-right">
-                  {!k.revoked && <button className="btn-danger" onClick={() => revoke(k.id)}>吊销</button>}
+                  {!k.revoked && <button className="btn-danger" onClick={() => revoke(k.id)}>删除</button>}
                 </td>
               </tr>
             ))}

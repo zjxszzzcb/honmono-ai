@@ -58,7 +58,7 @@ function DashboardInner() {
               : "创建客服前需要先兑换邀请码激活权益。"}
           </p>
         </div>
-        <button className="btn-primary whitespace-nowrap" onClick={merchant?.activated ? create : () => nav("/activate")} disabled={creating}>
+        <button className="btn-primary !rounded-xl whitespace-nowrap" onClick={merchant?.activated ? create : () => nav("/activate")} disabled={creating}>
           {creating ? "创建中…" : "＋ 创建客服"}
         </button>
       </div>
@@ -147,21 +147,18 @@ function ServiceCard({ svc, onEdit, onChanged }: { svc: Svc; onEdit: () => void;
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
-        <button className="btn-ghost !px-3 !py-1.5 text-[13px]" onClick={() => nav(`/services/${svc.id}/configure`)}>
+        <button className="btn-pill" onClick={() => nav(`/services/${svc.id}/configure`)}>
           配置
         </button>
         <button
-          className="btn-ghost !px-3 !py-1.5 text-[13px]"
+          className="btn-pill"
           onClick={() => nav(`/services/${svc.id}/test`)}
           disabled={svc.status !== "ready"}
           title={svc.status === "ready" ? "测试台" : "发布后可用"}
         >
           测试
         </button>
-        <button
-          className="btn-ghost ml-auto !px-3 !py-1.5 text-[13px] text-red-500 hover:border-red-200 hover:bg-red-50"
-          onClick={() => setDeleting(true)}
-        >
+        <button className="btn-pill btn-pill-danger ml-auto" onClick={() => setDeleting(true)}>
           删除
         </button>
       </div>

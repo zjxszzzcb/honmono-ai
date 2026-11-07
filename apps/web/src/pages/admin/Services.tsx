@@ -13,7 +13,7 @@ export function AdminServices() {
   }, [load]);
 
   const act = async (id: string, action: string) => {
-    if (action === "revoke-keys" && !confirm("确定吊销该客服全部 API Key？")) return;
+    if (action === "revoke-keys" && !confirm("确定删除该客服全部 API Key？")) return;
     await api(`/api/admin/customer-services/${id}/${action}`, { method: "POST" });
     load();
   };
@@ -42,7 +42,7 @@ export function AdminServices() {
                     {s.status === "disabled"
                       ? <button className="btn-ghost" onClick={() => act(s.id, "enable")}>恢复</button>
                       : <button className="btn-danger" onClick={() => act(s.id, "disable")}>停用</button>}
-                    <button className="btn-danger" onClick={() => act(s.id, "revoke-keys")}>吊销Key</button>
+                    <button className="btn-danger" onClick={() => act(s.id, "revoke-keys")}>删除 Key</button>
                   </div>
                 </td>
               </tr>
