@@ -15,6 +15,13 @@
       "when": 1794009382860,
       "tag": "0001_search-providers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794014021104,
+      "tag": "0002_service-description",
+      "breakpoints": true
     }
   ]
 }

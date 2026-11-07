@@ -86,11 +86,11 @@ function HandoffsInner({ id }: { id: string }) {
 
   return (
     <div>
-      <h1 className="mb-1 text-2xl font-bold">人工求助</h1>
+      <h1 className="mb-1 text-2xl font-bold">转人工</h1>
       <p className="mb-6 text-sm text-slate-500">AI 无法确认时会转人工：选择建议回复、编辑后发送，或直接接管会话。</p>
 
       {pending.length === 0 && human.length === 0 && closed.length === 0 && (
-        <div className="card p-10 text-center text-slate-400">暂无人工求助</div>
+        <div className="card p-10 text-center text-slate-400">暂无转人工</div>
       )}
 
       {[...pending, ...human].map((h) => (

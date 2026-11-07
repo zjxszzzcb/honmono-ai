@@ -1,4 +1,5 @@
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { api, useAuth } from "../auth";
 import { Logo } from "../components/Logo";
 
@@ -11,6 +12,20 @@ const STATUS_BADGE: Record<string, string> = {
 export function MerchantLayout({ children, active, wide }: { children: React.ReactNode; active?: string; wide?: boolean }) {
   const { merchant, refresh } = useAuth();
   const nav = useNavigate();
+  const location = useLocation();
+  const [pendingHandoffs, setPendingHandoffs] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+    api<{ state: string }[]>("/api/handoffs")
+      .then((hs) => {
+        if (alive) setPendingHandoffs(hs.filter((h) => h.state === "pending").length);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [location.pathname]);
 
   const logout = async () => {
     await api("/api/auth/logout", { method: "POST" }).catch(() => {});
@@ -25,7 +40,14 @@ export function MerchantLayout({ children, active, wide }: { children: React.Rea
           <div className="flex items-center gap-6">
             <Link to="/dashboard"><Logo size={26} /></Link>
             <nav className="flex items-center gap-1 text-sm">
-              <Link to="/dashboard" className={`rounded-lg px-3 py-1.5 ${active === "dashboard" ? "bg-orange-50 text-[#FF5000]" : "text-slate-600 hover:bg-slate-100"}`}>我的客服</Link>
+              <NavLink label="我的客服" to="/dashboard" current={location.pathname} />
+              <NavLink
+                label="人工接管"
+                to="/handoffs"
+                current={location.pathname}
+                badge={pendingHandoffs}
+              />
+              <NavLink label="API Keys" to="/api-keys" current={location.pathname} />
             </nav>
           </div>
           <div className="flex items-center gap-3 text-sm">
@@ -43,3 +65,20 @@ export function MerchantLayout({ children, active, wide }: { children: React.Rea
 }
 
 export { STATUS_BADGE };
+
+function NavLink({ label, to, current, badge }: { label: string; to: string; current: string; badge?: number }) {
+  const active = to === "/dashboard" ? /^\/dashboard|^\/services\//.test(current) : current.startsWith(to);
+  return (
+    <Link
+      to={to}
+      className={`relative rounded-lg px-3 py-1.5 ${active ? "bg-orange-50 text-[#FF5000]" : "text-slate-600 hover:bg-slate-100"}`}
+    >
+      {label}
+      {badge ? (
+        <span className="absolute -right-1 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#FF5000] px-1 text-[10px] font-bold text-white">
+          {badge}
+        </span>
+      ) : null}
+    </Link>
+  );
+}

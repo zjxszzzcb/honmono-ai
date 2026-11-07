@@ -56,6 +56,7 @@ export const customerServices = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     merchantId: uuid("merchant_id").notNull(),
     name: text("name").notNull(),
+    description: text("description"),
     status: text("status").notNull().default("configuring"), // configuring | ready | disabled | deleted
     activeSkillVersionId: uuid("active_skill_version_id"),
     draftSkillVersionId: uuid("draft_skill_version_id"),

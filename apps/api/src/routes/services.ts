@@ -54,7 +54,32 @@ serviceRoutes.get("/", async (c) => {
     .from(customerServices)
     .where(and(eq(customerServices.merchantId, merchantId), sql`${customerServices.status} != 'deleted'`))
     .orderBy(desc(customerServices.createdAt));
-  return c.json(rows.map((r) => ({ id: r.id, name: r.name, status: r.status, createdAt: r.createdAt })));
+  // 聚合：活跃版本号 / 待处理转人工 / 有效 Key 数
+  const out = [];
+  for (const r of rows) {
+    const [activeVersion] = r.activeSkillVersionId
+      ? await db.select({ v: skillVersions.version }).from(skillVersions).where(eq(skillVersions.id, r.activeSkillVersionId)).limit(1)
+      : [];
+    const [pendingHandoffs] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(handoffs)
+      .where(and(eq(handoffs.serviceId, r.id), sql`${handoffs.state} in ('pending','human_controlled')`));
+    const [activeKeys] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(apiKeys)
+      .where(and(eq(apiKeys.serviceId, r.id), sql`${apiKeys.revokedAt} is null`));
+    out.push({
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      status: r.status,
+      createdAt: r.createdAt,
+      activeVersion: activeVersion?.v ?? null,
+      pendingHandoffs: pendingHandoffs?.n ?? 0,
+      activeKeys: activeKeys?.n ?? 0,
+    });
+  }
+  return c.json(out);
 });
 
 serviceRoutes.post("/", async (c) => {
@@ -117,8 +142,14 @@ serviceRoutes.get("/:id", async (c) => {
 serviceRoutes.patch("/:id", async (c) => {
   const service = await requireOwnedService(c.req.param("id"), c.get("merchant")!.sub);
   if (!service) return c.json({ error: "not_found" }, 404);
-  const body = z.object({ name: z.string().min(1).max(64) }).parse(await c.req.json());
-  await db.update(customerServices).set({ name: body.name, updatedAt: new Date() }).where(eq(customerServices.id, service.id));
+  const body = z
+    .object({ name: z.string().min(1).max(64), description: z.string().max(500).nullable() })
+    .partial()
+    .parse(await c.req.json());
+  const patch: Record<string, unknown> = { updatedAt: new Date() };
+  if (body.name !== undefined) patch.name = body.name;
+  if (body.description !== undefined) patch.description = body.description;
+  await db.update(customerServices).set(patch).where(eq(customerServices.id, service.id));
   return c.json({ ok: true });
 });
 

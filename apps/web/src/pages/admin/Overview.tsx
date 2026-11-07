@@ -10,7 +10,7 @@ export function AdminOverview() {
     ["merchants", "商户总数"],
     ["services", "客服总数"],
     ["active_runs", "运行中 / 排队 Run"],
-    ["pending_handoffs", "待处理人工求助"],
+    ["pending_handoffs", "待处理转人工"],
     ["active_providers", "启用中的 Provider"],
   ];
   return (

@@ -11,6 +11,8 @@ import { Configure } from "./pages/Configure";
 import { TestPlayground } from "./pages/TestPlayground";
 import { ApiKeys } from "./pages/ApiKeys";
 import { Handoffs } from "./pages/Handoffs";
+import { HandoffsCenter } from "./pages/HandoffsCenter";
+import { ApiKeysCenter } from "./pages/ApiKeysCenter";
 import { AdminLogin } from "./pages/admin/AdminLogin";
 import { AdminLayout } from "./pages/admin/AdminLayout";
 import { AdminOverview } from "./pages/admin/Overview";
@@ -49,6 +51,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="/services/:id/test" element={<RequireMerchant><TestPlayground /></RequireMerchant>} />
           <Route path="/services/:id/keys" element={<RequireMerchant><ApiKeys /></RequireMerchant>} />
           <Route path="/services/:id/handoffs" element={<RequireMerchant><Handoffs /></RequireMerchant>} />
+          <Route path="/handoffs" element={<RequireMerchant><HandoffsCenter /></RequireMerchant>} />
+          <Route path="/api-keys" element={<RequireMerchant><ApiKeysCenter /></RequireMerchant>} />
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route path="/admin" element={<RequireAdmin><AdminLayout /></RequireAdmin>}>
             <Route index element={<AdminOverview />} />

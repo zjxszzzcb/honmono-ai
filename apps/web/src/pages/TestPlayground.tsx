@@ -101,7 +101,7 @@ function TestInner({ id }: { id: string }) {
             setEvents((p) => [...p, { kind: "human", text: `转人工：${data.question}`, at: Date.now() }]);
             setBubbles((prev) => [
               ...prev,
-              { key: nextKey(), role: "system", content: `⏸ 已创建人工求助（原因：${data.reason}）。可在「人工求助」页处理。` },
+              { key: nextKey(), role: "system", content: `⏸ 已创建转人工（原因：${data.reason}）。可在「转人工」页处理。` },
             ]);
           } else if (event === "error") {
             setEvents((p) => [...p, { kind: "error", text: String(data.message ?? "错误"), at: Date.now() }]);
@@ -182,7 +182,7 @@ function TestInner({ id }: { id: string }) {
 
         {lastStatus === "waiting_for_human" && (
           <div className="border-t border-amber-100 bg-amber-50/80 px-6 py-2.5 text-xs text-amber-700">
-            本会话已转人工：可在「人工求助」页选择建议回复或接管；处理后 AI 恢复自动应答。
+            本会话已转人工：可在「转人工」页选择建议回复或接管；处理后 AI 恢复自动应答。
           </div>
         )}
         <div className="border-t border-slate-100 px-4 pb-4 pt-3">

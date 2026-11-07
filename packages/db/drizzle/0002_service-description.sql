@@ -1,0 +1,1 @@
+ALTER TABLE "customer_services" ADD COLUMN "description" text;

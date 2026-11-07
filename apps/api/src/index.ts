@@ -9,6 +9,7 @@ import { authRoutes, adminAuthRoutes, activationRoutes } from "./routes/auth.js"
 import { serviceRoutes } from "./routes/services.js";
 import { publicRoutes } from "./routes/public.js";
 import { adminRoutes } from "./routes/admin.js";
+import { merchantRoutes } from "./routes/merchant.js";
 import { ensureDirs } from "./boot.js";
 import { setupGlobalProxy, setupLangfuseOtel } from "@honmono/agent";
 
@@ -52,6 +53,7 @@ app.route("/api/admin/auth", adminAuthRoutes);
 // 管理员业务路由挂载在 /api/admin（内部路由已含 /users 等路径）
 app.route("/api/admin", adminRoutes);
 app.route("/api/customer-services", serviceRoutes);
+app.route("/api", merchantRoutes);
 app.route("/v1", publicRoutes);
 
 app.onError((err, c) => {
