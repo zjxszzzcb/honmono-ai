@@ -302,7 +302,7 @@ export function AdminLlm() {
               <option value="brave">Brave（api.search.brave.com）</option>
             </select>
             <label className="label">API Key</label>
-            <input className="input mb-3" value={spKey} onChange={(e) => setSpKey(e.target.value)} placeholder={spType === "exa" ? "xxxxxxxx-…" : "BSA…"} />
+            <input className="input mb-3" value={spKey} onChange={(e) => setSpKey(e.target.value)} placeholder={spType === "exa" ? "xxxxxxxx-xxxx-xxxx-…" : "BSAi_…"} />
             <div className="flex items-center gap-2">
               <button className="btn-primary" onClick={addSearchProvider} disabled={!spName || !spKey}>
                 添加
