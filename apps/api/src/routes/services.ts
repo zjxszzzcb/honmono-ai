@@ -30,13 +30,17 @@ import {
 } from "@honmono/contracts";
 import { getQueue, redisConnection } from "../queues.js";
 import { runTestPlayground } from "../test-playground.js";
+import { purchases, merchants } from "@honmono/db";
 import type { AppEnv } from "../env.js";
 
 export const serviceRoutes = new Hono<AppEnv>();
 
-// 所有路由都要求商户会话（中间件在 index.ts 挂）
+// 所有路由都要求有效且活跃的商户会话
 serviceRoutes.use("*", async (c, next) => {
-  if (!c.get("merchant")) return c.json({ error: "unauthorized" }, 401);
+  const m = c.get("merchant");
+  if (!m) return c.json({ error: "unauthorized" }, 401);
+  const [row] = await db.select({ status: merchants.status }).from(merchants).where(eq(merchants.id, m.sub)).limit(1);
+  if (!row || row.status !== "active") return c.json({ error: "merchant_disabled", message: "账号已被停用" }, 401);
   await next();
 });
 
@@ -86,6 +90,11 @@ serviceRoutes.post("/", async (c) => {
   const merchantId = c.get("merchant")!.sub;
   const merchant = await getMerchant(merchantId);
   if (!merchant) return c.json({ error: "unauthorized" }, 401);
+  // 激活门槛：未兑换邀请码的商户不能创建客服（API 层强制，而非仅 UI）
+  const [activated] = await db.select({ n: sql<number>`count(*)::int` }).from(purchases).where(eq(purchases.merchantId, merchantId));
+  if ((activated?.n ?? 0) === 0) {
+    return c.json({ error: "activation_required", message: "请先兑换邀请码激活权益" }, 403);
+  }
   const body = CreateServiceInput.safeParse(await c.req.json().catch(() => ({})));
   const name = body.success && body.data.name ? body.data.name : "新建客服";
   const count = await db

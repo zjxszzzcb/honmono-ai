@@ -53,7 +53,7 @@ authRoutes.get("/me", async (c) => {
   const m = c.get("merchant");
   if (!m) return c.json({ error: "unauthorized" }, 401);
   const [row] = await db.select().from(merchants).where(eq(merchants.id, m.sub)).limit(1);
-  if (!row || row.status !== "active") return c.json({ error: "unauthorized" }, 401);
+  if (!row || row.status !== "active") return c.json({ error: "merchant_disabled" }, 401);
   const activated = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(purchases)

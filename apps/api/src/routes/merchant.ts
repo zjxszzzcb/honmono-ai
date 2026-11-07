@@ -7,7 +7,11 @@ import type { AppEnv } from "../env.js";
 export const merchantRoutes = new Hono<AppEnv>();
 
 merchantRoutes.use("*", async (c, next) => {
-  if (!c.get("merchant")) return c.json({ error: "unauthorized" }, 401);
+  const m = c.get("merchant");
+  if (!m) return c.json({ error: "unauthorized" }, 401);
+  const { merchants: mTable } = await import("@honmono/db");
+  const [row] = await db.select({ status: mTable.status }).from(mTable).where(eq(mTable.id, m.sub)).limit(1);
+  if (!row || row.status !== "active") return c.json({ error: "merchant_disabled", message: "账号已被停用" }, 401);
   await next();
 });
 

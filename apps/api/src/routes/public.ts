@@ -35,6 +35,9 @@ publicRoutes.post("/customer-services/:id/chat", async (c) => {
   const [service] = await db.select().from(customerServices).where(eq(customerServices.id, c.req.param("id"))).limit(1);
   if (!service || service.status === "deleted") return c.json({ error: "not_found", message: "客服不存在" }, 404);
   if (key.serviceId !== service.id) return c.json({ error: "forbidden", message: "API Key 与该客服不匹配" }, 403);
+  const { merchants: mTable } = await import("@honmono/db");
+  const [owner] = await db.select({ status: mTable.status }).from(mTable).where(eq(mTable.id, service.merchantId)).limit(1);
+  if (!owner || owner.status !== "active") return c.json({ error: "service_disabled", message: "客服所属账号已被停用" }, 409);
   if (service.status === "disabled") return c.json({ error: "service_disabled", message: "客服已停用" }, 409);
   if (service.status !== "ready") return c.json({ error: "service_not_ready", message: "客服尚未完成配置" }, 409);
   await touchApiKey(key.id);
