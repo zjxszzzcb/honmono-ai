@@ -36,6 +36,14 @@ function sortNodes(nodes: Node[]): Node[] {
   });
 }
 
+function countChildren(n: { children: Map<string, Node> }): number {
+  let count = 0;
+  for (const [, child] of n.children) {
+    count += child.isDir ? countChildren(child) : 1;
+  }
+  return count;
+}
+
 function fileIcon(path: string): string {
   if (path.endsWith("SKILL.md")) return "📘";
   if (path.startsWith("assets/raw/")) return "📎";
@@ -105,8 +113,19 @@ export function Explorer({
                 })
               }
             >
-              <span className="w-3 text-[9px] text-slate-400">{isCollapsed ? "▶" : "▼"}</span>
-              <span className="truncate text-[13px] text-slate-600">{n.name}/</span>
+              <svg
+                className={`h-3 w-3 shrink-0 text-slate-400 transition-transform ${isCollapsed ? "" : "rotate-90"}`}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+              <span className="truncate text-[13px] font-medium text-slate-600">{n.name}</span>
+              <span className="ml-auto text-[10px] text-slate-300">{countChildren(n)}</span>
             </button>
             {!isCollapsed && renderNodes(n.children, depth + 1)}
           </div>
